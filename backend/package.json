@@ -1,0 +1,27 @@
+{
+  "name": "credo-fabric-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RBAC-aware analytics API over Microsoft Fabric (Credicorp_lakehouse) for the CREDICORP executive dashboard",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "discover": "node scripts/discover.js",
+    "smoke": "node scripts/smoke.js",
+    "ask": "node test.js"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mssql": "^12.7.0",
+    "openai": "^4.77.0",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

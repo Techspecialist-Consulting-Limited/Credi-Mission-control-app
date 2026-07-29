@@ -1,0 +1,1357 @@
+openapi: 3.1.0
+
+info:
+  title: credo-fabric-ai
+  version: 0.2.0
+  summary: Analytics API over Microsoft Fabric for the CREDICORP executive dashboard
+  description: |
+    Read-only analytics API over `Credicorp_lakehouse`. It backs the CREDICORP executive
+    dashboard: KPI tiles, value aggregations, period-over-period deltas, breakdowns, trends,
+    drill-down tables, and a natural-language endpoint.
+
+    ## Two endpoints do most of the work
+
+    - **`GET /dashboard`** returns a *renderable layout* — for every dataset the caller can
+      read, which columns are measures, which are chartable dimensions, which is the time
+      axis, and the exact endpoint each tile should call. The frontend loops over tiles; it
+      never hardcodes a table or column name.
+    - **`GET /dashboard/pulse`** returns the *cross-platform rollup* — total records, how many
+      sit in a state needing action, total financial exposure, and period movement, across
+      every system the caller can see.
+
+    ## Schema-driven
+
+    Table and column names are validated against the live schema on every request. Nothing is
+    hardcoded, so the API works against the lakehouse without its columns being documented
+    here — and that validation is the injection boundary, since SQL identifiers cannot be
+    bound as parameters. Values are always bound.
+
+    ## Roles
+
+    The caller's role arrives in the `x-role` header (or `?role=`) and decides which datasets
+    are visible. The check runs *before* the query is built, so a denied request never reaches
+    the database.
+
+    | Role | Datasets |
+    | --- | --- |
+    | `staff` | `credo_support_tickets`, `vendor_registry` |
+    | `manager` | the above, plus `credo_memos`, `credo_travel_details` |
+    | `admin` | the above, plus `craig_audit_logs` |
+
+    ## Synthetic data
+
+    If Fabric is unreachable at startup the API serves a synthetic dataset instead. Every
+    response then carries `synthetic: true` and `source: "mock"`; both fields are **absent**
+    when data is live. Check `GET /health` → `dataSource.synthetic` to be certain.
+
+    ## Prototype status
+
+    **There is no authentication.** The `x-role` header is unverified, so any caller can claim
+    any role, and CORS is open by default. Deliberate for the demo; not safe beyond it.
+
+  contact:
+    name: CREDICORP executive dashboard backend
+  license:
+    name: Proprietary — internal CREDICORP use
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: '{scheme}://{host}/api/v1'
+    description: Deployed
+    variables:
+      scheme:
+        default: https
+        enum: [https, http]
+      host:
+        default: credo-fabric-ai.internal.credicorp
+
+tags:
+  - name: Service
+    description: |
+      Health, data-source state and self-description. Poll `/health` to know whether you are
+      looking at live or synthetic data; read `/capabilities` to discover the query grammar
+      this build supports rather than hardcoding it.
+  - name: Schema
+    description: |
+      What datasets exist, what their columns are, and which values those columns hold.
+      Everything else in the API is driven off this, and so should the frontend be.
+  - name: Dashboard
+    description: |
+      Composition. `/dashboard` is the layout to render; `/dashboard/pulse` is the
+      cross-dataset rollup that makes this a command center rather than a table browser.
+  - name: Metrics
+    description: |
+      The numbers behind tiles and charts — counts, aggregations, period comparisons,
+      breakdowns and time series. All filterable.
+  - name: Data
+    description: Paginated drill-down rows behind a tile.
+  - name: AI
+    description: |
+      Natural language over the same role-gated tools. The model never writes SQL — it picks
+      from a fixed tool set and the tool checks the role before touching data.
+  - name: Cache
+    description: TTL cache administration.
+
+paths:
+
+  # ---------------------------------------------------------------- Service --
+
+  /health:
+    get:
+      tags: [Service]
+      summary: Data source, connectivity and cache state
+      description: |
+        The first call to make. `dataSource.synthetic` tells you whether the numbers you are
+        about to show anyone are real.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Health snapshot. `ok` is false when the active source is unreachable.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+              examples:
+                live:
+                  summary: Connected to Fabric
+                  value:
+                    ok: true
+                    dataSource: { mode: auto, provider: fabric, synthetic: false, reason: Fabric probe succeeded }
+                    connection: connected
+                    database: Credicorp_lakehouse
+                    cache: { total: 42, fresh: 40, inflight: 0 }
+                    aiConfigured: true
+                fallback:
+                  summary: Fabric refused the login, serving synthetic data
+                  value:
+                    ok: true
+                    dataSource:
+                      mode: auto
+                      provider: mock
+                      synthetic: true
+                      reason: >-
+                        Fabric probe failed: Fabric accepted the connection then closed it during
+                        login. The token is valid, so this is authorization, not connectivity.
+                    connection: connected
+                    database: Credicorp_lakehouse
+                    cache: { total: 0, fresh: 0, inflight: 0 }
+                    aiConfigured: true
+
+  /health/reprobe:
+    post:
+      tags: [Service]
+      summary: Re-run data source selection
+      description: |
+        Re-probes Fabric and clears the cache, so a workspace grant can be picked up without a
+        restart. Call this the moment the identity is added to the Fabric workspace.
+
+        **Unauthenticated write endpoint** — put it behind auth before deployment.
+      operationId: reprobeDataSource
+      responses:
+        '200':
+          description: The newly selected source.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataSource' }
+
+  /capabilities:
+    get:
+      tags: [Service]
+      summary: Aggregations, buckets and filter operators this build supports
+      description: |
+        Lets the frontend build filter and metric pickers from the server's actual capability
+        list instead of a hardcoded copy that drifts.
+      operationId: getCapabilities
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Supported grammar.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Capabilities' }
+
+  /roles:
+    get:
+      tags: [Service]
+      summary: Valid roles and the one currently active
+      operationId: getRoles
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Role list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles: { type: array, items: { $ref: '#/components/schemas/Role' } }
+                  activeRole: { $ref: '#/components/schemas/Role' }
+                  note: { type: string, examples: ['Prototype: role is unverified.'] }
+
+  # ----------------------------------------------------------------- Schema --
+
+  /schema:
+    get:
+      tags: [Schema]
+      summary: Every dataset this role can read
+      description: |
+        Includes each dataset's time axis and its numeric measures, already filtered to the
+        columns worth aggregating (ids and reference numbers are excluded).
+      operationId: getSchema
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Datasets visible to the role.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      role: { $ref: '#/components/schemas/Role' }
+                      tables:
+                        type: array
+                        items: { $ref: '#/components/schemas/TableSchema' }
+                  - $ref: '#/components/schemas/SyntheticMarker'
+
+  /schema/{table}:
+    get:
+      tags: [Schema]
+      summary: One dataset's columns
+      operationId: getTableSchema
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+      responses:
+        '200':
+          description: Column list.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/TableSchema'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /schema/{table}/values:
+    get:
+      tags: [Schema]
+      summary: Distinct values in a column
+      description: Populates filter dropdowns. Returns each value with its row count, highest first.
+      operationId: getColumnValues
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: column
+          in: query
+          required: true
+          description: Column to enumerate.
+          schema: { type: string }
+          example: status
+        - name: limit
+          in: query
+          description: Maximum distinct values (1–200).
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Distinct values with counts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      table: { type: string }
+                      column: { type: string }
+                      values:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value: { type: [string, number, boolean, 'null'] }
+                            count: { type: integer }
+                  - $ref: '#/components/schemas/SyntheticMarker'
+              example:
+                table: vendor_registry
+                column: status
+                values:
+                  - { value: Active, count: 396 }
+                  - { value: Under Review, count: 99 }
+                  - { value: Pending Onboarding, count: 64 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------- Dashboard --
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Renderable tile and chart layout for this role
+      description: |
+        The layout contract. For each accessible dataset it returns a section containing:
+
+        - **`tiles`** — KPI tiles. A row count, plus up to three measure tiles. Money-like
+          columns get `fn=sum` and `format: currency`; other measures get `fn=avg`.
+        - **`charts`** — a time series on the dataset's time axis, plus breakdowns for text
+          columns with few enough distinct values to read as a chart. `type` is `donut` at
+          six values or fewer, `bar` above that.
+        - **`table`** — the drill-down grid, with a display label and kind per column.
+
+        Every entry carries the `endpoint` to call for its data, already assembled with query
+        parameters. Tiles that support a trend arrow also carry `trendEndpoint`.
+
+        Because it is derived from the live schema, a new table appearing in Fabric shows up
+        on the dashboard with no code change.
+      operationId: getDashboardSpec
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+      responses:
+        '200':
+          description: Layout spec.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DashboardSpec'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+
+  /dashboard/pulse:
+    get:
+      tags: [Dashboard]
+      summary: Cross-dataset rollup — totals, pressure and exposure
+      description: |
+        One number per question an executive actually asks, spanning every dataset the role
+        can see rather than describing one:
+
+        - **`headline.needsAttention`** — records in a state that means someone still has to
+          act (pending, open, escalated, suspended, denied, critical…). Closed states such as
+          *Rejected* and *Terminated* are deliberately excluded, since counting them inflates
+          the figure.
+        - **`headline.financialExposure`** — the sum of each dataset's most money-like measure.
+        - **`attention`** / **`exposure`** — the same, broken out per dataset and pre-sorted,
+          so the UI can render "where the pressure is" without sorting client-side.
+      operationId: getPulse
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - name: days
+          in: query
+          description: Comparison window for the period-over-period figures.
+          schema: { type: integer, minimum: 1, maximum: 3650, default: 30 }
+      responses:
+        '200':
+          description: Organisation rollup.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pulse'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+
+  # ---------------------------------------------------------------- Metrics --
+
+  /metrics/overview:
+    get:
+      tags: [Metrics]
+      summary: Row counts across every accessible dataset, each with a trend
+      description: The top strip of KPI tiles in a single request.
+      operationId: getOverview
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - name: days
+          in: query
+          description: Window for each dataset's trend comparison.
+          schema: { type: integer, minimum: 1, maximum: 3650, default: 30 }
+      responses:
+        '200':
+          description: Per-dataset counts and trends.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Overview'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+
+  /metrics/{table}/count:
+    get:
+      tags: [Metrics]
+      summary: Row count for one dataset
+      description: Accepts the full filter grammar, so this doubles as "how many X are pending".
+      operationId: getCount
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/DateColumn'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: The count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      table: { type: string }
+                      total: { type: integer, examples: [486] }
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /metrics/{table}/aggregate:
+    get:
+      tags: [Metrics]
+      summary: SUM / AVG / MIN / MAX over a dataset, optionally grouped
+      description: |
+        Turns the API from a row counter into something that can show spend, exposure and
+        averages. Two request forms:
+
+        - **One metric** — `?fn=sum&column=amount_requested`
+        - **Several** — `?metrics=sum:contract_value,avg:annual_spend,max:contract_value`
+
+        Each result is keyed by an alias derived from the metric (`sum_contract_value`), so the
+        frontend can address a figure by name. Add `?groupBy=` to get one row per group instead
+        of a single object — note this changes the shape of `results` from object to array.
+
+        `sum` and `avg` require a numeric column and return `400` otherwise.
+      operationId: getAggregate
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: fn
+          in: query
+          description: Aggregation for the single-metric form. Ignored when `metrics` is supplied.
+          schema: { $ref: '#/components/schemas/Aggregation' }
+        - name: column
+          in: query
+          description: Column to aggregate. Not needed for `fn=count`.
+          schema: { type: string }
+          example: amount_requested
+        - name: metrics
+          in: query
+          description: 'Multi-metric form: comma-separated `fn:column` pairs.'
+          schema: { type: string }
+          example: sum:contract_value,avg:annual_spend,max:contract_value
+        - name: groupBy
+          in: query
+          description: Column to group by. Changes `results` from an object to an array.
+          schema: { type: string }
+          example: department
+        - name: limit
+          in: query
+          description: Maximum groups when grouping.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 12 }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/DateColumn'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: Aggregated values.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/AggregateResponse'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+              examples:
+                single:
+                  summary: One metric, ungrouped — results is an object
+                  value:
+                    table: credo_memos
+                    metrics: [{ fn: sum, column: amount_requested, alias: sum_amount_requested }]
+                    groupBy: null
+                    results: { sum_amount_requested: 950205414.63 }
+                    filters: []
+                grouped:
+                  summary: Grouped — results is an array
+                  value:
+                    table: credo_travel_details
+                    metrics: [{ fn: sum, column: actual_cost, alias: sum_actual_cost }]
+                    groupBy: department
+                    results:
+                      - { group: Legal, sum_actual_cost: 1081899.74 }
+                      - { group: Risk & Compliance, sum_actual_cost: 942959.68 }
+                    filters: []
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /metrics/{table}/compare:
+    get:
+      tags: [Metrics]
+      summary: Trailing window vs the window before it
+      description: |
+        The trend arrow on a KPI tile. Compares the last `days` against the `days` immediately
+        preceding, returning both values, the absolute change and the percentage.
+
+        Defaults to a row count; pass `fn` and `column` to compare a value instead — total
+        travel spend this month vs last, say.
+
+        `percentChange` is `null` when the previous window was zero, because a change from zero
+        has no meaningful percentage. Render the arrow, omit the figure.
+      operationId: getComparison
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: days
+          in: query
+          description: Length of each window.
+          schema: { type: integer, minimum: 1, maximum: 3650, default: 30 }
+        - name: fn
+          in: query
+          description: Aggregation to compare. Defaults to a row count.
+          schema: { $ref: '#/components/schemas/Aggregation' }
+        - name: column
+          in: query
+          description: Column to aggregate when `fn` is not `count`.
+          schema: { type: string }
+        - $ref: '#/components/parameters/DateColumn'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: Both windows and the movement between them.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      table: { type: string }
+                  - $ref: '#/components/schemas/Trend'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: The dataset has no date column, so windows cannot be compared.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /metrics/{table}/breakdown:
+    get:
+      tags: [Metrics]
+      summary: GROUP BY counts — the donut and bar charts
+      description: |
+        Counts grouped by one column, highest first, each with its share of the total.
+
+        Null groups are real data but an unlabelled chart slice is not, so `label` is
+        `"(not set)"` while `rawLabel` keeps the original `null` for filtering.
+      operationId: getBreakdown
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: column
+          in: query
+          required: true
+          description: Column to group by.
+          schema: { type: string }
+          example: status
+        - name: limit
+          in: query
+          description: Maximum groups returned.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 12 }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/DateColumn'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: Groups with counts and shares.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Breakdown'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /metrics/{table}/timeseries:
+    get:
+      tags: [Metrics]
+      summary: Bucketed counts over time — the trend lines
+      description: |
+        Counts collapsed to the start of each bucket, ascending. Uses the dataset's default
+        time axis unless `column` says otherwise.
+
+        Supply `days` for a trailing window, or `from`/`to` for an explicit range — `from`/`to`
+        take precedence and `days` is then reported as `null`.
+
+        Buckets are `YYYY-MM-DD` strings, already normalised for the source's timezone.
+      operationId: getTimeseries
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: column
+          in: query
+          description: Date column to bucket on. Omit to use the dataset default.
+          schema: { type: string }
+        - name: bucket
+          in: query
+          schema: { $ref: '#/components/schemas/Bucket' }
+        - name: days
+          in: query
+          description: Trailing window size. Ignored when `from`/`to` are supplied.
+          schema: { type: integer, minimum: 1, maximum: 3650, default: 90 }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: |
+            The series. If the dataset has no temporal column, or the named column is not a
+            date, this still returns `200` with an empty `series` and an explanatory `note` —
+            a chart with no data is not an error condition.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Timeseries'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------- Data --
+
+  /data/{table}:
+    get:
+      tags: [Data]
+      summary: Paginated drill-down rows
+      description: |
+        Returns whole rows. Sorting defaults to the dataset's time axis descending; pagination
+        is capped at 500 rows per page.
+
+        Any query parameter that is not a reserved key is treated as a column filter, using the
+        same grammar as everywhere else.
+      operationId: getRows
+      parameters:
+        - $ref: '#/components/parameters/RoleHeader'
+        - $ref: '#/components/parameters/Table'
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          description: Silently clamped to 500.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+        - name: sort
+          in: query
+          description: Column to sort by. Defaults to the dataset's time axis.
+          schema: { type: string }
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/DateColumn'
+        - $ref: '#/components/parameters/Filters'
+      responses:
+        '200':
+          description: A page of rows.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/DataPage'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # --------------------------------------------------------------------- AI --
+
+  /ai/ask:
+    post:
+      tags: [AI]
+      summary: Answer a question in natural language
+      description: |
+        The model never writes SQL. It selects from a fixed set of role-gated tools
+        (`list_datasets`, `organisation_pulse`, `count_rows`, `aggregate_metric`,
+        `compare_periods`, `breakdown_by_column`, `trend_over_time`, `sample_records`) and each
+        one checks the caller's role before touching data. A denied request therefore never
+        reaches the database, and a hallucinated table name fails schema resolution rather
+        than executing.
+
+        The `trace` shows which tools ran with what arguments, so the dashboard can display
+        provenance instead of an unsourced figure. A tool that was refused has `denied: true` —
+        surface that rather than hiding it.
+
+        Requires Azure OpenAI to be configured; returns `503` if it is not.
+      operationId: askQuestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  description: The question, in plain language.
+                  examples: ['what is our total travel spend by department this year?']
+                role:
+                  $ref: '#/components/schemas/Role'
+            examples:
+              aggregate:
+                summary: A value question
+                value: { question: 'what is our total travel spend by department this year?', role: admin }
+              summary:
+                summary: A broad question — resolves via the pulse tool
+                value: { question: 'give me an executive summary of what needs attention right now', role: admin }
+      responses:
+        '200':
+          description: |
+            The answer and its provenance. Note this is `200` even when the model could not
+            answer or every tool was denied — read `trace` to distinguish those cases.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/AskResponse'
+                  - $ref: '#/components/schemas/SyntheticMarker'
+              examples:
+                answered:
+                  summary: Answered from a tool result
+                  value:
+                    answer: There are 486 memos currently pending approval.
+                    role: manager
+                    trace:
+                      - tool: count_rows
+                        args: { table: credo_memos, filters: { status: Pending Approval } }
+                        denied: false
+                        ok: true
+                denied:
+                  summary: Role could not see the data
+                  value:
+                    answer: There is no dataset available related to memos. I cannot answer this question.
+                    role: staff
+                    trace: []
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: Azure OpenAI is not configured on this deployment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------------------------------------------------------ Cache --
+
+  /cache/invalidate:
+    post:
+      tags: [Cache]
+      summary: Drop cached results
+      description: |
+        Omit `prefix` to clear everything, or pass one to clear a slice — cache keys are
+        prefixed by kind: `count:`, `breakdown:`, `timeseries:`, `aggregate:`, `compare:`,
+        `distinct:`, `profile:`, `schema:`.
+
+        **Unauthenticated write endpoint** — put it behind auth before deployment.
+      operationId: invalidateCache
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prefix:
+                  type: string
+                  description: Key prefix to clear. Omit to clear the whole cache.
+                  examples: ['breakdown:credo_memos']
+      responses:
+        '200':
+          description: Cache state after the drop.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  cache: { $ref: '#/components/schemas/CacheStats' }
+
+# ============================================================== Components ==
+
+components:
+
+  # -------------------------------------------------------------- Security --
+
+  securitySchemes:
+    RoleHeader:
+      type: apiKey
+      in: header
+      name: x-role
+      description: |
+        **Prototype only, and not a security mechanism.** The role is read from this header
+        with no verification whatsoever, so any caller can claim any role. It is modelled as a
+        security scheme purely so Swagger UI offers a box to set it.
+
+        Replace with a validated token claim before this is exposed beyond the demo.
+
+  # ------------------------------------------------------------ Parameters --
+
+  parameters:
+
+    RoleHeader:
+      name: x-role
+      in: header
+      required: false
+      description: |
+        Caller's role. Falls back to `DEFAULT_ROLE` (`admin` in development) when absent.
+        An unrecognised value also falls back — it never escalates.
+      schema: { $ref: '#/components/schemas/Role' }
+
+    Table:
+      name: table
+      in: path
+      required: true
+      description: |
+        Dataset name, case-insensitive. Validated against the live schema — an unknown name is
+        a `404`, and a name the role cannot read is a `403` regardless of whether it exists.
+      schema: { type: string }
+      examples:
+        tickets: { value: credo_support_tickets }
+        vendors: { value: vendor_registry }
+        memos: { value: credo_memos }
+        travel: { value: credo_travel_details }
+        audit: { value: craig_audit_logs }
+
+    From:
+      name: from
+      in: query
+      description: |
+        Start of a date range, applied to the dataset's time axis **without the caller needing
+        to know its column name**. Override the column with `dateColumn`.
+      schema: { type: string, format: date }
+      example: '2026-01-01'
+
+    To:
+      name: to
+      in: query
+      description: End of the date range, inclusive.
+      schema: { type: string, format: date }
+      example: '2026-03-31'
+
+    DateColumn:
+      name: dateColumn
+      in: query
+      description: Which temporal column `from`/`to` apply to. Defaults to the dataset's time axis.
+      schema: { type: string }
+      example: created_at
+
+    Filters:
+      name: filters
+      in: query
+      style: form
+      explode: true
+      required: false
+      description: |
+        **Free-form column filters.** Any query parameter that is not a reserved key is read as
+        a filter on the column of that name. A bare value means equality; anything richer takes
+        an operator prefix.
+
+        | Expression | Meaning |
+        | --- | --- |
+        | `?status=Open` | `status = 'Open'` |
+        | `?status=ne:Draft` | `status <> 'Draft'` |
+        | `?status=in:Open,Escalated` | `status IN (…)` |
+        | `?status=nin:Draft,Closed` | `status NOT IN (…)` |
+        | `?amount_requested=gte:500000` | `>=` — also `gt`, `lt`, `lte` |
+        | `?created_at=between:2026-01-01,2026-03-31` | inclusive range |
+        | `?vendor_name=contains:Atlantic` | `LIKE '%Atlantic%'` |
+        | `?vendor_name=startswith:Atl` | `LIKE 'Atl%'` |
+        | `?resolved_at=isnull` | `IS NULL` |
+        | `?resolved_at=notnull` | `IS NOT NULL` |
+
+        Values are coerced to the column's type; one that does not fit is a `400`. An operator
+        that does not suit the type is also a `400` — `gte` on text, `contains` on a number.
+        Repeating a parameter is read as an `in` list.
+
+        Null handling follows SQL: a `NULL` fails every comparison, including `ne`. Use
+        `isnull` / `notnull` explicitly.
+
+        Applied filters are echoed back on the response as `filters`, so the UI can render chips.
+
+        **Reserved keys** (never treated as filters): `page`, `pageSize`, `sort`, `order`,
+        `role`, `column`, `limit`, `bucket`, `days`, `from`, `to`, `dateColumn`, `fn`,
+        `groupBy`, `metrics`.
+      schema:
+        type: object
+        additionalProperties: { type: string }
+      examples:
+        equality:
+          summary: Equality
+          value: { status: Approved }
+        combined:
+          summary: Several filters combine with AND
+          value: { status: 'in:Pending Approval,Under Review', amount_requested: 'gte:500000' }
+        nullCheck:
+          summary: Unresolved records
+          value: { resolved_at: isnull }
+
+  # --------------------------------------------------------------- Schemas --
+
+  schemas:
+
+    Role:
+      type: string
+      enum: [staff, manager, admin]
+      description: |
+        `staff` sees support tickets and vendors; `manager` adds memos and travel; `admin` adds
+        the compliance/AML audit log.
+
+    Aggregation:
+      type: string
+      enum: [count, count_distinct, sum, avg, min, max]
+
+    Bucket:
+      type: string
+      enum: [day, week, month, quarter, year]
+      default: day
+
+    ColumnKind:
+      type: string
+      enum: [temporal, numeric, text, boolean, other]
+      description: |
+        What a dashboard can do with the column. `temporal` can be a time axis, `numeric` can be
+        summed, `text` and `boolean` can be dimensions.
+
+    SyntheticMarker:
+      type: object
+      description: |
+        Present on every response **only** when the synthetic data source is active. Both fields
+        are absent when data is live, so their presence is the reliable signal.
+      properties:
+        synthetic:
+          type: boolean
+          const: true
+          description: These figures are not real lakehouse data.
+        source:
+          type: string
+          const: mock
+
+    DataSource:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [auto, fabric, mock]
+          description: |
+            `auto` probes Fabric at startup and falls back; `fabric` treats a failure as an
+            error; `mock` never touches Azure. The fallback is a startup decision, never a
+            per-query one — a query failing mid-session errors rather than switching sources.
+        provider: { type: string, enum: [fabric, mock] }
+        synthetic: { type: boolean }
+        reason:
+          type: string
+          description: Why this source was chosen. On a fallback, the full Fabric failure.
+
+    CacheStats:
+      type: object
+      properties:
+        total: { type: integer, description: Entries held, fresh or stale. }
+        fresh: { type: integer, description: Entries still within their TTL. }
+        inflight: { type: integer, description: Producers running now, deduped by single-flight. }
+
+    Health:
+      type: object
+      properties:
+        ok: { type: boolean, description: False when the active source is unreachable. }
+        dataSource: { $ref: '#/components/schemas/DataSource' }
+        connection:
+          type: string
+          description: '`connected`, or the failure message.'
+        database: { type: string }
+        cache: { $ref: '#/components/schemas/CacheStats' }
+        aiConfigured:
+          type: boolean
+          description: Whether `/ai/ask` will work, or return 503.
+
+    Capabilities:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        aggregations: { type: array, items: { $ref: '#/components/schemas/Aggregation' } }
+        buckets: { type: array, items: { $ref: '#/components/schemas/Bucket' } }
+        filterOperators:
+          type: array
+          items: { type: string }
+          examples: [[eq, ne, gt, gte, lt, lte, in, nin, between, contains, startswith, isnull, notnull]]
+        filterSyntax: { type: string }
+        dataSource: { $ref: '#/components/schemas/DataSource' }
+
+    Column:
+      type: object
+      properties:
+        name: { type: string }
+        dataType: { type: string, description: 'Source type name, e.g. `nvarchar`, `datetime2`.' }
+        kind: { $ref: '#/components/schemas/ColumnKind' }
+        nullable: { type: boolean }
+
+    TableSchema:
+      type: object
+      properties:
+        table: { type: string }
+        schema: { type: string, examples: [dbo] }
+        columns: { type: array, items: { $ref: '#/components/schemas/Column' } }
+        timeAxis:
+          type: [string, 'null']
+          description: Column used for trends and `from`/`to` when none is named.
+        measures:
+          type: array
+          items: { type: string }
+          description: |
+            Numeric columns worth aggregating. Ids and reference numbers are excluded — a tile
+            reading "Total ticket_id" would discredit the page.
+
+    Trend:
+      type: object
+      description: A trailing window against the one immediately before it.
+      properties:
+        metric:
+          type: string
+          description: '`count`, or `fn(column)`.'
+          examples: ['sum(amount_requested)']
+        dateColumn: { type: string }
+        windowDays: { type: integer }
+        current: { type: [number, 'null'] }
+        previous: { type: [number, 'null'] }
+        change: { type: [number, 'null'] }
+        percentChange:
+          type: [number, 'null']
+          description: |
+            Null when the previous window was zero — a change from zero has no meaningful
+            percentage. Render the arrow without a figure.
+        direction: { type: string, enum: [up, down, flat] }
+        currentWindow: { $ref: '#/components/schemas/Window' }
+        previousWindow: { $ref: '#/components/schemas/Window' }
+
+    Window:
+      type: object
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+
+    FilterEcho:
+      type: object
+      description: A filter as the server understood it, for rendering chips.
+      properties:
+        column: { type: string }
+        op: { type: string }
+        value: {}
+
+    Overview:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        windowDays: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        tables:
+          type: array
+          items:
+            type: object
+            properties:
+              table: { type: string }
+              rows: { type: integer }
+              columns: { type: integer }
+              temporalColumn: { type: [string, 'null'] }
+              measures: { type: array, items: { type: string } }
+              trend:
+                oneOf:
+                  - { $ref: '#/components/schemas/Trend' }
+                  - { type: 'null' }
+                description: Null when the dataset has no time axis.
+
+    AggregateResponse:
+      type: object
+      properties:
+        table: { type: string }
+        metrics:
+          type: array
+          items:
+            type: object
+            properties:
+              fn: { $ref: '#/components/schemas/Aggregation' }
+              column: { type: [string, 'null'] }
+              alias:
+                type: string
+                description: The key this metric's value appears under in `results`.
+        groupBy: { type: [string, 'null'] }
+        results:
+          description: |
+            An **object** of alias → value when ungrouped; an **array** of one object per group
+            when `groupBy` is set, each carrying a `group` field.
+          oneOf:
+            - type: object
+              additionalProperties: { type: [number, string, 'null'] }
+            - type: array
+              items:
+                type: object
+                properties:
+                  group: { type: [string, 'null'] }
+                additionalProperties: { type: [number, string, 'null'] }
+        filters: { type: array, items: { $ref: '#/components/schemas/FilterEcho' } }
+
+    Breakdown:
+      type: object
+      properties:
+        table: { type: string }
+        column: { type: string }
+        total: { type: integer, description: Sum of the returned groups, not of the whole dataset. }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string, description: 'Printable. Null groups become `(not set)`.' }
+              rawLabel: { type: [string, number, boolean, 'null'], description: Original value, for filtering. }
+              value: { type: integer }
+              share: { type: number, description: Percentage of `total`, one decimal place. }
+        filters: { type: array, items: { $ref: '#/components/schemas/FilterEcho' } }
+
+    Timeseries:
+      type: object
+      properties:
+        table: { type: string }
+        column: { type: [string, 'null'] }
+        bucket:
+          oneOf:
+            - { $ref: '#/components/schemas/Bucket' }
+            - { type: 'null' }
+        days: { type: [integer, 'null'], description: Null when an explicit `from`/`to` range was used. }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              bucket: { type: string, format: date, description: 'Start of the bucket, `YYYY-MM-DD`.' }
+              value: { type: integer }
+        note:
+          type: string
+          description: Present only when the series is empty by design — no temporal column, or the named column is not a date.
+        filters: { type: array, items: { $ref: '#/components/schemas/FilterEcho' } }
+
+    DataPage:
+      type: object
+      properties:
+        table: { type: string }
+        rows:
+          type: array
+          description: Whole source rows. Shape follows the dataset — see `/schema/{table}`.
+          items: { type: object, additionalProperties: true }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer, description: Matching rows before pagination. }
+        totalPages: { type: integer }
+        sort: { type: string }
+        order: { type: string, enum: [ASC, DESC] }
+        filters: { type: array, items: { $ref: '#/components/schemas/FilterEcho' } }
+
+    Tile:
+      type: object
+      description: A KPI tile. Fetch `endpoint` for the figure, `trendEndpoint` for the arrow.
+      properties:
+        id: { type: string }
+        type: { type: string, const: kpi }
+        title: { type: string }
+        dataset: { type: string }
+        format:
+          type: string
+          enum: [integer, currency, decimal]
+          description: How the frontend should format the value.
+        endpoint: { type: string }
+        trendEndpoint: { type: [string, 'null'], description: Null when the dataset has no time axis. }
+
+    Chart:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [line, donut, bar] }
+        title: { type: string }
+        dataset: { type: string }
+        column: { type: string, description: Present on breakdown charts. }
+        distinctValues: { type: integer, description: Why this became a donut rather than a bar. }
+        xAxis: { type: string, description: Present on line charts. }
+        endpoint: { type: string }
+
+    DashboardSection:
+      type: object
+      description: One dataset's worth of the dashboard.
+      properties:
+        id: { type: string }
+        title: { type: string, description: Humanised dataset name. }
+        dataset: { type: string }
+        timeAxis: { type: [string, 'null'] }
+        filterable:
+          type: array
+          items: { type: string }
+          description: Columns with few enough distinct values to offer as a filter control.
+        tiles: { type: array, items: { $ref: '#/components/schemas/Tile' } }
+        charts: { type: array, items: { $ref: '#/components/schemas/Chart' } }
+        table:
+          type: object
+          description: The drill-down grid.
+          properties:
+            id: { type: string }
+            type: { type: string, const: table }
+            title: { type: string }
+            endpoint: { type: string }
+            columns:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  label: { type: string }
+                  kind: { $ref: '#/components/schemas/ColumnKind' }
+
+    DashboardSpec:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        generatedAt: { type: string, format: date-time }
+        summaryEndpoint: { type: string, examples: ['/api/v1/dashboard/pulse'] }
+        sections: { type: array, items: { $ref: '#/components/schemas/DashboardSection' } }
+
+    Pulse:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        windowDays: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        headline:
+          type: object
+          properties:
+            datasets: { type: integer }
+            totalRecords: { type: integer }
+            newThisPeriod: { type: integer }
+            previousPeriod: { type: integer }
+            percentChange: { type: [number, 'null'] }
+            needsAttention:
+              type: integer
+              description: Records in a state requiring action. Closed states are excluded.
+            financialExposure:
+              type: number
+              description: Sum of each dataset's most money-like measure.
+        attention:
+          type: array
+          description: Per dataset, sorted by count descending.
+          items:
+            type: object
+            properties:
+              dataset: { type: string }
+              label: { type: string }
+              column: { type: string, description: The status-like column this was read from. }
+              count: { type: integer }
+              share: { type: number }
+              states:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    label: { type: string }
+                    value: { type: integer }
+        exposure:
+          type: array
+          description: Per dataset, sorted by total descending.
+          items:
+            type: object
+            properties:
+              dataset: { type: string }
+              label: { type: string }
+              column: { type: string }
+              measureLabel: { type: string }
+              total: { type: number }
+        datasets:
+          type: array
+          description: The per-dataset detail the headline was rolled up from.
+          items:
+            type: object
+            properties:
+              dataset: { type: string }
+              label: { type: string }
+              rows: { type: integer }
+              trend:
+                oneOf:
+                  - { $ref: '#/components/schemas/Trend' }
+                  - { type: 'null' }
+              exposure: { type: ['object', 'null'] }
+              attention: { type: ['object', 'null'] }
+
+    AskResponse:
+      type: object
+      properties:
+        answer: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        trace:
+          type: array
+          description: Which tools ran, in order. Show this as provenance.
+          items:
+            type: object
+            properties:
+              tool: { type: string }
+              args: { type: object, additionalProperties: true }
+              denied: { type: boolean, description: The role was refused this data. }
+              ok: { type: boolean }
+        truncated:
+          type: boolean
+          description: Present when the model hit the tool-call limit without resolving.
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: Human-readable message. Safe to surface. }
+        name:
+          type: string
+          enum: [AccessDeniedError, UnknownObjectError, BadRequestError, Error]
+          description: Stable discriminator — branch on this, not on the message.
+        requestId:
+          type: string
+          description: Echoed in the `x-request-id` response header. Quote it in bug reports.
+
+  # ------------------------------------------------------------- Responses --
+
+  responses:
+
+    BadRequest:
+      description: |
+        The request was understood but is not valid — an operator that does not suit the
+        column's type, a value that will not coerce, a missing required parameter.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            typeMismatch:
+              value: { error: "Operator 'gte' needs a numeric or date column, not 'status'", name: BadRequestError, requestId: r7 }
+            badValue:
+              value: { error: "'not-a-date' is not a date (column 'created_at')", name: BadRequestError, requestId: r8 }
+
+    Forbidden:
+      description: |
+        The role may not read this dataset. Returned **before** the table is resolved, so a
+        caller cannot distinguish a dataset they cannot see from one that does not exist.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: "Role 'staff' is not permitted to read 'credo_memos'", name: AccessDeniedError, requestId: r9 }
+
+    NotFound:
+      description: The column does not exist on this dataset.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: "Unknown column 'nope' on 'credo_memos'", name: UnknownObjectError, requestId: ra }
+
+security:
+  - RoleHeader: []
