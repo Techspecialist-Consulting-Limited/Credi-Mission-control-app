@@ -22,7 +22,15 @@ export function StackedBarChart({
       bar: { horizontal, borderRadius: 4, borderRadiusApplication: "end", ...(horizontal ? { barHeight: "60%" } : { columnWidth: "55%" }) },
     },
     colors: series.map((s) => s.color),
-    dataLabels: { enabled: false },
+    dataLabels: {
+      enabled: true,
+      style: { fontSize: "10px", fontWeight: 700, colors: ["#ffffff"] },
+      formatter: (val) => {
+        const num = Number(val);
+        if (!num) return "";
+        return valueFormatter ? valueFormatter(num) : Math.round(num).toLocaleString();
+      },
+    },
     grid: { borderColor: "#e5e7eb", strokeDashArray: 3 },
     legend: { position: "top", horizontalAlign: "left", fontSize: "12px", fontWeight: 600 },
     xaxis: {

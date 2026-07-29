@@ -30,7 +30,12 @@ export function DonutChart({
       markers: { size: 7 },
       itemMargin: { horizontal: 10, vertical: 4 },
     },
-    dataLabels: { enabled: false },
+    dataLabels: {
+      enabled: true,
+      style: { fontSize: "11px", fontWeight: 700, colors: ["#ffffff"] },
+      dropShadow: { enabled: false },
+      formatter: (val) => `${Number(val).toFixed(0)}%`,
+    },
     stroke: { width: 2, colors: ["#ffffff"] },
     plotOptions: {
       pie: {

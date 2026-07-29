@@ -32,13 +32,13 @@ export function PressureRanking({ items }: { items: PressureItem[] }) {
         </div>
       </div>
 
-      <ul className="mt-3 flex flex-col">
+      <ul className="mt-2 flex flex-col">
         {items.map((item, i) => (
           <li key={item.key} className={i > 0 ? "border-t border-border" : undefined}>
-            <div className="-mx-2 rounded-lg px-2 py-4 transition-colors duration-150 hover:bg-secondary/40">
-              <div className="flex items-start gap-3.5">
+            <div className="-mx-2 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-secondary/40">
+              <div className="flex items-start gap-3">
                 <span
-                  className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-bold ${
+                  className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${
                     RANK_TONE[Math.min(i, RANK_TONE.length - 1)]
                   }`}
                 >
@@ -46,15 +46,15 @@ export function PressureRanking({ items }: { items: PressureItem[] }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3">
-                    <h3 className="text-[14.5px] font-semibold text-foreground">{item.label}</h3>
-                    <span className="shrink-0 text-[14.5px] font-semibold tabular-nums text-foreground">
+                    <h3 className="text-[13.5px] font-semibold text-foreground">{item.label}</h3>
+                    <span className="shrink-0 text-[13.5px] font-semibold tabular-nums text-foreground">
                       {item.count.toLocaleString()}
                     </span>
                   </div>
-                  <p className="mt-0.5 truncate text-[12.5px] text-secondary-foreground/80">
+                  <p className="mt-0.5 truncate text-[12px] text-secondary-foreground/80">
                     {item.states.map((s) => `${s.value.toLocaleString()} ${s.label.toLowerCase()}`).join(" · ")}
                   </p>
-                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
                     <div
                       className={`h-full rounded-full ${TRACK_TONE[Math.min(i, TRACK_TONE.length - 1)]}`}
                       style={{ width: `${Math.max(6, Math.round((item.count / max) * 100))}%` }}

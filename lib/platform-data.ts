@@ -118,7 +118,7 @@ export type CredoData = {
     kpis: Kpi[];
     zoneBreakdown: Slice[];
     purposeBreakdown: Slice[];
-    scatter: { travelId: string; duration: number; cost: number; outlier: boolean }[];
+    costByDuration: { travelId: string; duration: number; cost: number }[];
     recent: TravelRow[];
     recentTotal: number;
     filterOptions: { zones: string[]; purposes: string[] };
@@ -281,18 +281,6 @@ async function getTravelSection(filters: CredoFilters): Promise<CredoData["trave
     distinctValues("credo_travel_details", "purpose"),
   ]);
 
-  const costs = allRows.rows.map((r) => r.cost_ngn).sort((a, b) => a - b);
-  const quantile = (q: number) => {
-    if (costs.length === 0) return 0;
-    const pos = (costs.length - 1) * q;
-    const base = Math.floor(pos);
-    const rest = pos - base;
-    return costs[base + 1] !== undefined ? costs[base] + rest * (costs[base + 1] - costs[base]) : costs[base];
-  };
-  const q1 = quantile(0.25);
-  const q3 = quantile(0.75);
-  const outlierThreshold = q3 + 1.5 * (q3 - q1);
-
   const kpis: Kpi[] = [
     {
       key: "total-travel",
@@ -340,11 +328,10 @@ async function getTravelSection(filters: CredoFilters): Promise<CredoData["trave
     kpis,
     zoneBreakdown: toSlice(zoneBreakdown.series),
     purposeBreakdown: toSlice(purposeBreakdown.series),
-    scatter: allRows.rows.map((row) => ({
+    costByDuration: allRows.rows.map((row) => ({
       travelId: row.travel_id,
       duration: row.duration_days,
       cost: row.cost_ngn,
-      outlier: row.cost_ngn > outlierThreshold,
     })),
     recent: recent.rows.map((row) => ({
       travelId: row.travel_id,

@@ -66,7 +66,7 @@ export function MissionControlDetail({ data }: { data: OpsTelemetry }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <PressureRanking items={data.servicePressure} />
         </div>

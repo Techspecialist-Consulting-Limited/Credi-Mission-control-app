@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, useContext, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Filter } from "lucide-react";
+import { Filter, Loader2 } from "lucide-react";
 import { KpiRow } from "./kpi-row";
 import { ChartCard } from "./chart-card";
 import { RecordsTable, type RecordColumn } from "./records-table";
@@ -11,7 +11,6 @@ import { StatusPill } from "./status-pill";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { BarChart } from "@/components/charts/bar-chart";
 import { StackedBarChart } from "@/components/charts/stacked-bar-chart";
-import { ScatterChart } from "@/components/charts/scatter-chart";
 import { cn } from "@/lib/utils";
 import { nairaCompact } from "@/lib/dashboard-data";
 import type { CredoData } from "@/lib/platform-data";
@@ -24,10 +23,24 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+/** Filter selects live several components deep from the useTransition() call that
+ * owns the pending state (CredoDetail), so it's threaded through context rather than
+ * prop-drilling - every FilterSelect/ResetFiltersButton in the active tab shares one
+ * pending flag, and content dims together instead of each control tracking its own. */
+const FilterTransitionContext = createContext<{ isPending: boolean; start: (fn: () => void) => void }>({
+  isPending: false,
+  start: (fn) => fn(),
+});
+
+function useFilterTransition() {
+  return useContext(FilterTransitionContext);
+}
+
 function FilterSelect({ param, label, options }: { param: string; label: string; options: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { start } = useFilterTransition();
   const value = searchParams.get(param) ?? "";
 
   return (
@@ -37,7 +50,7 @@ function FilterSelect({ param, label, options }: { param: string; label: string;
         const next = new URLSearchParams(searchParams.toString());
         if (e.target.value) next.set(param, e.target.value);
         else next.delete(param);
-        router.push(`${pathname}?${next.toString()}`, { scroll: false });
+        start(() => router.push(`${pathname}?${next.toString()}`, { scroll: false }));
       }}
       className="rounded-lg border border-border bg-secondary/60 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
     >
@@ -55,6 +68,7 @@ function ResetFiltersButton({ params }: { params: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { start } = useFilterTransition();
   const hasAny = params.some((p) => searchParams.get(p));
   if (!hasAny) return null;
 
@@ -64,7 +78,7 @@ function ResetFiltersButton({ params }: { params: string[] }) {
       onClick={() => {
         const next = new URLSearchParams(searchParams.toString());
         params.forEach((p) => next.delete(p));
-        router.push(`${pathname}?${next.toString()}`, { scroll: false });
+        start(() => router.push(`${pathname}?${next.toString()}`, { scroll: false }));
       }}
       className="ml-1 text-[11px] font-medium text-secondary-foreground/70 underline hover:text-secondary-foreground"
     >
@@ -75,40 +89,44 @@ function ResetFiltersButton({ params }: { params: string[] }) {
 
 export function CredoDetail({ data }: { data: CredoData }) {
   const [active, setActive] = useState<TabKey>("memos");
+  const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex w-fit gap-1 rounded-xl border border-border bg-secondary/40 p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActive(tab.key)}
-            className={cn(
-              "relative rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors duration-200 ease-out",
-              active === tab.key ? "text-white" : "text-secondary-foreground/80 hover:text-foreground"
-            )}
-          >
-            {active === tab.key && (
-              <motion.span
-                layoutId="credo-tab-pill"
-                className="absolute inset-0 rounded-lg bg-sidebar shadow-sm"
-                transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              />
-            )}
-            <span className="relative">{tab.label}</span>
-          </button>
-        ))}
-      </div>
+    <FilterTransitionContext.Provider value={{ isPending, start: startTransition }}>
+      <div className="flex flex-col gap-8">
+        <div className="flex w-fit gap-1 rounded-xl border border-border bg-secondary/40 p-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActive(tab.key)}
+              className={cn(
+                "relative rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors duration-200 ease-out",
+                active === tab.key ? "text-white" : "text-secondary-foreground/80 hover:text-foreground"
+              )}
+            >
+              {active === tab.key && (
+                <motion.span
+                  layoutId="credo-tab-pill"
+                  className="absolute inset-0 rounded-lg bg-sidebar shadow-sm"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
+              )}
+              <span className="relative">{tab.label}</span>
+            </button>
+          ))}
+        </div>
 
-      {active === "memos" && <MemosTab data={data.memos} />}
-      {active === "travel" && <TravelTab data={data.travel} />}
-      {active === "support" && <SupportTab data={data.support} />}
-    </div>
+        {active === "memos" && <MemosTab data={data.memos} />}
+        {active === "travel" && <TravelTab data={data.travel} />}
+        {active === "support" && <SupportTab data={data.support} />}
+      </div>
+    </FilterTransitionContext.Provider>
   );
 }
 
 function FilterBar({ children }: { children: React.ReactNode }) {
+  const { isPending } = useFilterTransition();
   return (
     <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5 shadow-sm">
       <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary-foreground/80">
@@ -116,6 +134,25 @@ function FilterBar({ children }: { children: React.ReactNode }) {
         Filters:
       </div>
       {children}
+      {isPending && (
+        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-medium text-secondary-foreground/60">
+          <Loader2 className="size-3 animate-spin" strokeWidth={2.5} /> Updating…
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Wraps a tab's filter bar + content so the content dims as one unit while a
+ * filter change is pending, instead of only the control that was clicked. */
+function FilterableSection({ filters, children }: { filters: React.ReactNode; children: React.ReactNode }) {
+  const { isPending } = useFilterTransition();
+  return (
+    <div className="flex flex-col gap-8">
+      <FilterBar>{filters}</FilterBar>
+      <div className={cn("flex flex-col gap-8 transition-opacity duration-200", isPending && "pointer-events-none opacity-50")}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -137,14 +174,16 @@ function MemosTab({ data }: { data: CredoData["memos"] }) {
   ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <FilterBar>
-        <FilterSelect param="memoDepartment" label="Department" options={data.filterOptions.departments} />
-        <FilterSelect param="memoStatus" label="Status" options={data.filterOptions.statuses} />
-        <FilterSelect param="memoCategory" label="Category" options={data.filterOptions.categories} />
-        <ResetFiltersButton params={["memoDepartment", "memoStatus", "memoCategory"]} />
-      </FilterBar>
-
+    <FilterableSection
+      filters={
+        <>
+          <FilterSelect param="memoDepartment" label="Department" options={data.filterOptions.departments} />
+          <FilterSelect param="memoStatus" label="Status" options={data.filterOptions.statuses} />
+          <FilterSelect param="memoCategory" label="Category" options={data.filterOptions.categories} />
+          <ResetFiltersButton params={["memoDepartment", "memoStatus", "memoCategory"]} />
+        </>
+      }
+    >
       <KpiRow kpis={data.kpis} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -178,7 +217,7 @@ function MemosTab({ data }: { data: CredoData["memos"] }) {
           />
         </div>
       </section>
-    </div>
+    </FilterableSection>
   );
 }
 
@@ -192,16 +231,28 @@ const travelColumns: RecordColumn<CredoData["travel"]["recent"][number]>[] = [
 ];
 
 function TravelTab({ data }: { data: CredoData["travel"] }) {
-  const outlierCount = data.scatter.filter((p) => p.outlier).length;
+  const avgCostByDuration = Object.values(
+    data.costByDuration.reduce<Record<number, { duration: number; total: number; count: number }>>((acc, p) => {
+      const bucket = acc[p.duration] ?? { duration: p.duration, total: 0, count: 0 };
+      bucket.total += p.cost;
+      bucket.count += 1;
+      acc[p.duration] = bucket;
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => a.duration - b.duration)
+    .map((b) => ({ duration: b.duration, avgCost: b.total / b.count }));
 
   return (
-    <div className="flex flex-col gap-8">
-      <FilterBar>
-        <FilterSelect param="travelZone" label="Zone" options={data.filterOptions.zones} />
-        <FilterSelect param="travelPurpose" label="Purpose" options={data.filterOptions.purposes} />
-        <ResetFiltersButton params={["travelZone", "travelPurpose"]} />
-      </FilterBar>
-
+    <FilterableSection
+      filters={
+        <>
+          <FilterSelect param="travelZone" label="Zone" options={data.filterOptions.zones} />
+          <FilterSelect param="travelPurpose" label="Purpose" options={data.filterOptions.purposes} />
+          <ResetFiltersButton params={["travelZone", "travelPurpose"]} />
+        </>
+      }
+    >
       <KpiRow kpis={data.kpis} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -216,15 +267,12 @@ function TravelTab({ data }: { data: CredoData["travel"] }) {
           </ChartCard>
         </div>
         <div className="lg:col-span-3">
-          <ChartCard
-            title="Duration vs cost"
-            subtitle="Detecting anomalies with Q3 + 1.5·IQR on cost"
-            badge={outlierCount > 0 ? `${outlierCount} outlier${outlierCount === 1 ? "" : "s"}` : undefined}
-          >
-            <ScatterChart
-              points={data.scatter.map((p) => ({ x: p.duration, y: p.cost, outlier: p.outlier }))}
-              xLabel="Duration (days)"
-              yFormatter={nairaCompact}
+          <ChartCard title="Average cost by trip length" subtitle="Mean cost per duration, in days">
+            <BarChart
+              categories={avgCostByDuration.map((d) => `${d.duration}d`)}
+              values={avgCostByDuration.map((d) => d.avgCost)}
+              color="#a855f7"
+              valueFormatter={nairaCompact}
               height={280}
             />
           </ChartCard>
@@ -247,7 +295,7 @@ function TravelTab({ data }: { data: CredoData["travel"] }) {
           />
         </div>
       </section>
-    </div>
+    </FilterableSection>
   );
 }
 
@@ -277,13 +325,15 @@ function SupportTab({ data }: { data: CredoData["support"] }) {
   ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <FilterBar>
-        <FilterSelect param="ticketCategory" label="Category" options={data.filterOptions.categories} />
-        <FilterSelect param="ticketStatus" label="Status" options={data.filterOptions.statuses} />
-        <ResetFiltersButton params={["ticketCategory", "ticketStatus"]} />
-      </FilterBar>
-
+    <FilterableSection
+      filters={
+        <>
+          <FilterSelect param="ticketCategory" label="Category" options={data.filterOptions.categories} />
+          <FilterSelect param="ticketStatus" label="Status" options={data.filterOptions.statuses} />
+          <ResetFiltersButton params={["ticketCategory", "ticketStatus"]} />
+        </>
+      }
+    >
       <KpiRow kpis={data.kpis} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -294,7 +344,11 @@ function SupportTab({ data }: { data: CredoData["support"] }) {
         </div>
         <div className="lg:col-span-2">
           <ChartCard title="Tickets by category" subtitle="Every ticket in this view">
-            <DonutChart labels={data.categoryBreakdown.map((s) => s.label)} values={data.categoryBreakdown.map((s) => s.value)} />
+            <DonutChart
+              labels={data.categoryBreakdown.map((s) => s.label)}
+              values={data.categoryBreakdown.map((s) => s.value)}
+              height={300}
+            />
           </ChartCard>
         </div>
       </div>
@@ -311,6 +365,6 @@ function SupportTab({ data }: { data: CredoData["support"] }) {
           />
         </div>
       </section>
-    </div>
+    </FilterableSection>
   );
 }
