@@ -54,6 +54,106 @@ function FindingsView({ findings, evidence }: { findings: AiFindings; evidence?:
   );
 }
 
+/** Splits **bold** spans out of a line of text into styled fragments. */
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
+type ContentBlock =
+  | { type: "p"; text: string }
+  | { type: "ul"; items: string[] }
+  | { type: "record"; lead: string; items: string[] };
+
+/** Groups the model's markdown-ish plain text into paragraphs, bullet lists,
+ * and "numbered item + its bullet details" records (the shape it reaches for
+ * when listing rows like memos) - so raw markdown syntax never reaches the UI. */
+function parseContentBlocks(content: string): ContentBlock[] {
+  const lines = content
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const numbered = /^\d+[.)]\s+(.*)/.exec(line);
+      if (numbered) return { kind: "numbered" as const, text: numbered[1] };
+      const bullet = /^[-*•]\s+(.*)/.exec(line);
+      if (bullet) return { kind: "bullet" as const, text: bullet[1] };
+      const heading = /^#{1,6}\s+(.*)/.exec(line);
+      return { kind: "text" as const, text: heading ? heading[1] : line };
+    });
+
+  const blocks: ContentBlock[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const cur = lines[i];
+    if (cur.kind === "numbered" || cur.kind === "bullet") {
+      const items: string[] = [];
+      let j = i + 1;
+      while (j < lines.length && lines[j].kind === "bullet") {
+        items.push(lines[j].text);
+        j++;
+      }
+      blocks.push(
+        cur.kind === "numbered" ? { type: "record", lead: cur.text, items } : { type: "ul", items: [cur.text, ...items] }
+      );
+      i = j;
+      continue;
+    }
+    blocks.push({ type: "p", text: cur.text });
+    i++;
+  }
+  return blocks;
+}
+
+function MessageContent({ content }: { content: string }) {
+  const blocks = parseContentBlocks(content);
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, i) => {
+        if (block.type === "p") {
+          return (
+            <p key={i} className="leading-relaxed">
+              {renderInline(block.text)}
+            </p>
+          );
+        }
+        if (block.type === "ul") {
+          return (
+            <ul key={i} className="list-disc space-y-1 pl-4 marker:text-secondary-foreground/40">
+              {block.items.map((item, j) => (
+                <li key={j} className="leading-relaxed">
+                  {renderInline(item)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <div key={i} className="rounded-lg border border-border bg-white p-2.5">
+            <p className="font-medium leading-relaxed">{renderInline(block.lead)}</p>
+            {block.items.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-secondary-foreground/80">
+                {block.items.map((item, j) => (
+                  <li key={j} className="leading-relaxed">
+                    {renderInline(item)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AiModal() {
   const { isOpen, presetPrompt, close } = useAiModal();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -179,7 +279,7 @@ export function AiModal() {
                   {m.role === "assistant" && m.findings ? (
                     <FindingsView findings={m.findings} evidence={m.evidence} />
                   ) : (
-                    <p className="leading-relaxed whitespace-pre-line">{m.content}</p>
+                    <MessageContent content={m.content ?? ""} />
                   )}
                 </div>
               ))}
