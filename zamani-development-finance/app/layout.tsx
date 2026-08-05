@@ -13,7 +13,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* suppressHydrationWarning here only: browser extensions (Grammarly,
+          password managers, etc.) inject attributes like
+          data-gr-ext-installed onto <body> after load, which React then
+          flags as a mismatch even though the app never rendered them. This
+          doesn't suppress warnings on any child - only real bugs deeper in
+          the tree would still be caught. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

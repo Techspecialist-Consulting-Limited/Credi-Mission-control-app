@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { CommandBar, useClickOutside } from './command-bar'
 import { AiWidget } from './ai-widget'
-import { AnimatedGrid, AnimatedGridItem } from './animated-kpi'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -218,6 +217,18 @@ const RISK_SOURCE_ICON: Record<string, string> = {
 // it" (severity is still visible via each card's colour bar and status pill).
 const CATEGORY_LABELS: Record<RiskCategory, string> = { money: 'Money held', credit: 'Credit', compliance: 'Compliance', reporting: 'Reporting' }
 const CATEGORY_COLORS: Record<RiskCategory, string> = { money: '#0F8A4B', credit: '#B91C1C', compliance: '#B45309', reporting: '#2563EB' }
+// Mount-triggered (not scroll-triggered) stagger, deliberately not the
+// shared AnimatedGrid/AnimatedGridItem: those use `whileInView`+`once`, which
+// is right for static content but wrong here - this grid's contents change
+// via filter clicks, not scrolling, and a card can end up positioned oddly
+// relative to the viewport right after a click. `whileInView` doesn't
+// reliably re-fire for that case and can leave a card stuck invisible
+// (confirmed: opacity stayed 0 indefinitely). Animating on mount instead
+// means every filter change - which always remounts this grid, see the
+// `${riskFilter}-${tier}` key below - animates in correctly regardless of
+// scroll position.
+const riskGridContainer: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } }
+const riskGridItem: Variants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } } }
 const formatNaira = (n: number) => {
   if (Math.abs(n) >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(2)}bn`
   if (Math.abs(n) >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}m`
@@ -1145,7 +1156,15 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               const pc = priorityColors[tier]
               const tierLabel = tier === 'high' ? 'High Priority' : tier === 'medium' ? 'Medium Priority' : 'Low Priority'
               return (
-                <div key={tier} style={{ marginBottom: 24 }}>
+                // Keyed on the filter too, not just the tier - forces a clean
+                // remount whenever the filter changes so each card's
+                // scroll-triggered entrance animation re-fires reliably. The
+                // grid is already on screen when a filter chip is clicked, so
+                // this reads as a deliberate "refresh" rather than a delay.
+                // (Without this, whileInView's `once: true` can leave a card
+                // stuck invisible - it doesn't reliably re-trigger just
+                // because the same tier's contents changed underneath it.)
+                <div key={`${riskFilter}-${tier}`} style={{ marginBottom: 24 }}>
                   {visibleTierCount > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: pc.dot, flexShrink: 0 }} />
@@ -1153,11 +1172,23 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                       <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>({tierRisks.length})</span>
                     </div>
                   )}
-                  <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" style={{ gap: 12 }}>
+                  <motion.div
+                    className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
+                    style={{ gap: 12 }}
+                    variants={riskGridContainer}
+                    initial="hidden"
+                    animate="show"
+                  >
                     {tierRisks.map((risk) => {
                       const ss = statusStyles[risk.status]
                       return (
-                        <AnimatedGridItem key={risk.id} style={{ height: '100%' }}>
+                        <motion.div
+                          key={risk.id}
+                          variants={riskGridItem}
+                          whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(10,14,26,0.1)' }}
+                          transition={{ duration: 0.2 }}
+                          style={{ height: '100%' }}
+                        >
                           <div
                             onClick={() => setActiveRisk(risk)}
                             style={{
@@ -1193,10 +1224,10 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                               </button>
                             </div>
                           </div>
-                        </AnimatedGridItem>
+                        </motion.div>
                       )
                     })}
-                  </AnimatedGrid>
+                  </motion.div>
                 </div>
               )
               })
