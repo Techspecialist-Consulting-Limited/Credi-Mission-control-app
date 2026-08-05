@@ -189,7 +189,7 @@ export function AiWidget({
               <span style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>✦</span>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "white", fontFamily: "Inter" }}>Ada</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontFamily: "Inter" }}>Your dashboard analyst · always across the numbers</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontFamily: "Inter" }}>Your shortcut to a straight answer</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} aria-label="Close Ada" style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 6, width: 26, height: 26, color: "white", cursor: "pointer", fontSize: 15 }}>
@@ -201,7 +201,7 @@ export function AiWidget({
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10, background: "#F8FAFC" }}>
             {messages.length === 0 && (
               <div style={{ fontSize: 12.5, color: "#6B7A94", fontFamily: "Inter", lineHeight: 1.6 }}>
-                Hi, I&rsquo;m Ada. I&rsquo;ve read everything on this dashboard — every KPI, every risk, every partner record — so you don&rsquo;t have to dig for it. Ask me anything, in plain terms, and I&rsquo;ll always point you to the real number behind the answer.
+                Hi, I&rsquo;m Ada. Ask me anything about what&rsquo;s happening across the business — in plain language — and I&rsquo;ll always point you to the real number behind the answer.
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                   {["What needs my attention today?", "Which domain is most at risk?", "Summarise the lapsed approvals."].map((s) => (
                     <button
