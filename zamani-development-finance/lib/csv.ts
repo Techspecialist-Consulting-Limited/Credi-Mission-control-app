@@ -87,6 +87,18 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.length > 1 || (r.length === 1 && r[0] !== ""));
 }
 
+// Every page (the executive overview, and every persona's own overview on
+// top of it) calls the same fetchXxx wrappers independently, and several of
+// these files are tens of MB (lending_repayments is ~28MB) - parsing +
+// row-mapping is real CPU work, not just a network fetch. Caching only the
+// raw text (above) still meant redoing that work on every call, so a single
+// page load could parse the same multi-MB file two or more times, and every
+// navigation redid it from scratch even on a cache-warm raw text. This cache
+// stores the fully mapped rows per URL instead, so parse+map happens once
+// per hour (matching REVALIDATE_MS) no matter how many places ask for it.
+const parsedCache = new Map<string, { rows: unknown[]; expiresAt: number }>();
+const parseInFlight = new Map<string, Promise<unknown[]>>();
+
 /** Fetches one CSV from the mock-data-crdi-proto repo and maps every row
  * through `mapRow`. `folder` matches the repo's exact folder name (note
  * "PFI Partner Portal" has spaces - encodeURIComponent handles that). */
@@ -96,16 +108,34 @@ export async function fetchCsv<T>(
   mapRow: (cols: Record<string, string>) => T
 ): Promise<T[]> {
   const url = `${REPO_RAW_BASE}/${encodeURIComponent(folder)}/${file}.csv`;
-  const text = await fetchRawText(url);
-  const rows = parseCsv(text);
-  const header = rows[0];
-  const dataRows = rows.slice(1);
 
-  return dataRows.map((r) => {
-    const obj: Record<string, string> = {};
-    header.forEach((h, idx) => (obj[h.trim()] = r[idx] ?? ""));
-    return mapRow(obj);
-  });
+  const cached = parsedCache.get(url);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows as T[];
+
+  const pending = parseInFlight.get(url);
+  if (pending) return pending as Promise<T[]>;
+
+  const promise = (async () => {
+    const text = await fetchRawText(url);
+    const rows = parseCsv(text);
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+
+    const mapped = dataRows.map((r) => {
+      const obj: Record<string, string> = {};
+      header.forEach((h, idx) => (obj[h.trim()] = r[idx] ?? ""));
+      return mapRow(obj);
+    });
+    parsedCache.set(url, { rows: mapped, expiresAt: Date.now() + REVALIDATE_MS });
+    return mapped;
+  })();
+
+  parseInFlight.set(url, promise);
+  try {
+    return await promise;
+  } finally {
+    parseInFlight.delete(url);
+  }
 }
 
 /** Common field coercions - CSV values arrive as strings, everything else is invented. */
