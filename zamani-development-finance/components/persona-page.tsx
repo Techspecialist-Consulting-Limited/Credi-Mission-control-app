@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Calendar,
   CheckCircle2,
@@ -77,6 +78,7 @@ export function PersonaPage({
   activeHref: string;
 }) {
   const { domains, risks, asOfLabel } = dashboardProps;
+  const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [aiOpen, setAiOpen] = useState(false);
 
@@ -100,17 +102,21 @@ export function PersonaPage({
       : `${queueCount === 1 ? "One thing needs" : `${queueCount} things need`} you today.`;
 
   // These pages don't own in-place domain/risk panels the way the Executive
-  // Overview does - the command bar's real destinations for those are full
+  // Overview does - the command bar's real destinations for those are
   // navigations back to "/" (with the domain pre-selected via the same
   // ?domain= param Dashboard already reads on mount), not a local modal.
+  // router.push instead of window.location.href: Next's client-side router
+  // fetches the destination route (including its server-rendered data) and
+  // swaps it in without a full page reload, so this reads as an instant
+  // transition rather than a white-flash browser navigation.
   const goToDomain = (key: DomainKey) => {
-    window.location.href = `/?domain=${key}`;
+    router.push(`/?domain=${key}`);
   };
   const goHome = () => {
-    window.location.href = "/";
+    router.push("/");
   };
   const goToRisks = () => {
-    window.location.href = "/";
+    router.push("/");
   };
 
   return (

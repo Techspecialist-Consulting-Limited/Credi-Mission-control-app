@@ -3,8 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { Landmark, Wallet, Users, Package, type LucideIcon } from 'lucide-react'
 import { CommandBar, useClickOutside } from './command-bar'
 import { AiWidget } from './ai-widget'
+import { AnimatedNumber } from './animated-kpi'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -52,13 +54,12 @@ export interface Risk {
 export interface Domain {
   key: DomainKey
   label: string
-  icon: string
   score: number
   trend: 'up' | 'down' | 'stable'
   trendValue: string
   status: 'healthy' | 'attention' | 'critical'
   aiSummary: string
-  kpis: { label: string; value: string; delta?: string; deltaDir?: 'up' | 'down'; href?: string }[]
+  kpis: { key: string; label: string; value: string; delta?: string; deltaDir?: 'up' | 'down'; deltaGood?: boolean; href?: string }[]
   /** Compact-tile facts for the Executive Overview's Domain Overview card - a
    * real headline figure, a real supporting detail, and a status driven by a
    * stated threshold rather than the composite score above. */
@@ -93,12 +94,6 @@ export interface DashboardProps {
 }
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
-
-function TrendIcon({ dir, value }: { dir: 'up' | 'down' | 'stable'; value: string }) {
-  const color = dir === 'up' ? '#059669' : dir === 'down' ? '#DC2626' : '#6B7A94'
-  const arrow = dir === 'up' ? '↑' : dir === 'down' ? '↓' : '→'
-  return <span style={{ color, fontSize: 12, fontWeight: 500, fontFamily: 'Inter' }}>{arrow} {value}</span>
-}
 
 function StatusDot({ status }: { status: 'healthy' | 'attention' | 'critical' }) {
   const colors = { healthy: '#059669', attention: '#D97706', critical: '#DC2626' }
@@ -181,7 +176,7 @@ function SegmentRing({
           })}
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: `0 ${strokeWidth + 4}px` }}>
-        <span className="font-display" style={{ fontSize: size * 0.26, fontWeight: 800, color: '#0A0E1A', letterSpacing: '-0.02em', lineHeight: 1 }}>{centerValue}</span>
+        <AnimatedNumber value={centerValue} style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: size * 0.24, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em', lineHeight: 1 }} />
         <span style={{ fontSize: Math.max(8.5, size * 0.08), color: '#6B7A94', fontFamily: 'Inter', lineHeight: 1.15, marginTop: 3, whiteSpace: 'nowrap' }}>{centerLabel}</span>
       </div>
     </div>
@@ -203,14 +198,35 @@ export const DOMAIN_TAGLINES: Record<DomainKey, string> = {
   partners: 'Are our partner institutions performing, and reporting reliably?',
   procurement: "What's moving through procurement, and is it compliant?",
 }
+// The Decision Workspaces card and the "Where things stand" tile above it
+// must never disagree on status - but they used to repeat the exact same
+// headline fact too, which just reads as clutter. Each card here leads with
+// a different real KPI (already computed, already on domain.kpis) so opening
+// the workspace answers a genuinely new question instead of restating one.
+const DOMAIN_HEADLINE_KPI_KEY: Record<DomainKey, string> = {
+  lending: 'mandate-reach',
+  finance: 'funding-liquidity',
+  partners: 'probation-exposure',
+  procurement: 'vendor-compliance',
+}
+// One real icon per domain, used everywhere a domain needs identity (domain
+// cards, health-card tiles, the workspace panel header) instead of the
+// hand-picked Unicode glyphs (◈ ◎ ⬡ ◇) used previously - those read as a
+// placeholder next to the real lucide icons the persona pages already use.
+const DOMAIN_ICON_COMPONENT: Record<DomainKey, LucideIcon> = {
+  lending: Landmark,
+  finance: Wallet,
+  partners: Users,
+  procurement: Package,
+}
 // Risk.subtitle carries the real source-system name, not a DomainKey, so it
-// needs its own lookup - same glyphs as DOMAIN_TAGLINES/adapt-dashboard's
-// DOMAIN_ICON for one consistent icon language across the app.
-const RISK_SOURCE_ICON: Record<string, string> = {
-  Lending: '◈',
-  Finance: '◎',
-  'PFI Partner Portal': '⬡',
-  Procurement: '◇',
+// needs its own lookup - same icons as DOMAIN_ICON_COMPONENT above, for one
+// consistent icon language across the app.
+const RISK_SOURCE_ICON: Record<string, LucideIcon> = {
+  'ZDF (CMS)': Landmark,
+  'Microsoft Dynamics (ERP)': Wallet,
+  'ZDF PFI Partners Portal': Users,
+  'ZDF e-Procurement Portal': Package,
 }
 // Filter-chip identity for the Risk Center - by consequence, not severity, so
 // picking one answers "what kind of problem is this" rather than "how bad is
@@ -527,7 +543,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
   const downloadDomainReport = () => {
     const lines = [
       `${domain.label} — DOMAIN REPORT`,
-      `Score: ${domain.score}/100 (${statusLabels[domain.status]}) · Trend: ${domain.trendValue}`,
+      `Status: ${statusLabels[domain.tileStatusTone]} · ${domain.tileHeadline}`,
       '',
       domain.aiSummary,
       '',
@@ -551,7 +567,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <span style={{ fontSize: 20 }}>{domain.icon}</span>
+                {(() => { const Icon = DOMAIN_ICON_COMPONENT[domain.key]; return <Icon size={20} color="#0F8A4B" strokeWidth={2} /> })()}
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.08em', fontFamily: 'Inter', textTransform: 'uppercase' }}>Decision Workspace</span>
               </div>
               <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, color: '#0A0E1A', margin: 0 }}>{domain.label}</h2>
@@ -560,14 +576,11 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
             <button onClick={onClose} style={{ background: '#F4F6F9', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6B7A94' }}>×</button>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${statusColors[domain.status]}14`, border: `1px solid ${statusColors[domain.status]}30`, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: statusColors[domain.status] }}>
-              <StatusDot status={domain.status} />{statusLabels[domain.status]}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${statusColors[domain.tileStatusTone]}14`, border: `1px solid ${statusColors[domain.tileStatusTone]}30`, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: statusColors[domain.tileStatusTone] }}>
+              <StatusDot status={domain.tileStatusTone} />{statusLabels[domain.tileStatusTone]}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#6B7A94' }}>
-              Health Score: <strong style={{ color: '#0A0E1A', marginLeft: 4 }}>{domain.score}/100</strong>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#6B7A94' }}>
-              <TrendIcon dir={domain.trend} value={domain.trendValue} />
+              {domain.tileHeadline}
             </span>
           </div>
         </div>
@@ -579,7 +592,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
               <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="ghost-btn" onClick={downloadDomainReport} style={{ padding: '5px 12px', fontSize: 12 }}>Generate report</button>
                 {[
-                  { label: 'Explain this', question: `Explain why the ${domain.label} domain is scoring ${domain.score}/100 (${statusLabels[domain.status]}) and trending ${domain.trendValue}.` },
+                  { label: 'Explain this', question: `Explain why the ${domain.label} domain is marked ${statusLabels[domain.tileStatusTone]} — ${domain.tileHeadline}, ${domain.tileSupporting} — and what to do about it.` },
                   { label: 'Forecast', question: `Based on current data, forecast how the ${domain.label} domain is likely to trend over the next quarter.` },
                 ].map((a) => (
                   <button key={a.label} className="ghost-btn" onClick={() => onAskAI(a.question)} style={{ padding: '5px 12px', fontSize: 12 }}>{a.label}</button>
@@ -599,7 +612,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
                       {kpi.href && <span style={{ fontSize: 11, color: '#0F8A4B', fontFamily: 'Inter', flexShrink: 0 }}>Drill in →</span>}
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: '#0A0E1A', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>{kpi.value}</div>
-                    {kpi.delta && <div style={{ fontSize: 11, marginTop: 4, color: kpi.deltaDir === 'up' ? '#059669' : '#DC2626', fontWeight: 500 }}>{kpi.deltaDir === 'up' ? '↑' : '↓'} {kpi.delta} vs last period</div>}
+                    {kpi.delta && <div style={{ fontSize: 11, marginTop: 4, color: kpi.deltaGood ? '#059669' : '#DC2626', fontWeight: 500 }}>{kpi.deltaDir === 'up' ? '↑' : '↓'} {kpi.delta} vs last period</div>}
                   </>
                 )
                 return kpi.href ? (
@@ -744,7 +757,9 @@ function EnterpriseHealthCard({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 6, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, color: '#0F8A4B', flexShrink: 0 }}>{d.icon}</span>
+                  <span style={{ width: 20, height: 20, borderRadius: 6, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F8A4B', flexShrink: 0 }}>
+                    {(() => { const Icon = DOMAIN_ICON_COMPONENT[d.key]; return <Icon size={12} strokeWidth={2.25} /> })()}
+                  </span>
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: '#6B7A94', fontFamily: 'Inter' }}>{d.label}</span>
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: statusColors[d.tileStatusTone], background: `${statusColors[d.tileStatusTone]}12`, border: `1px solid ${statusColors[d.tileStatusTone]}30`, borderRadius: 5, padding: '1px 7px', fontFamily: 'Inter', flexShrink: 0 }}>
@@ -933,7 +948,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
       briefSummary,
       '',
       'DOMAIN BREAKDOWN',
-      ...domains.map((d) => `- ${d.label}: ${d.tileHeadline} (${d.status}) — ${d.tileSupporting}`),
+      ...domains.map((d) => `- ${d.label}: ${d.tileHeadline} (${d.tileStatusTone === 'healthy' ? 'Healthy' : d.tileStatusTone === 'attention' ? 'Needs Attention' : 'Critical'}) — ${d.tileSupporting}`),
       '',
       `RISK REGISTER (${risks.length} item${risks.length === 1 ? '' : 's'})`,
       ...risks.map((r) => `- [${r.priority.toUpperCase()}] ${r.title} — ${r.description}`),
@@ -965,8 +980,28 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
       <main className="px-4 sm:px-6 lg:px-8" style={{ maxWidth: 1480, margin: '0 auto', paddingTop: 32, paddingBottom: 80 }}>
 
         {/* ── Hero ──────────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ marginBottom: 40, position: 'relative' }}>
+          {/* Soft ambient glow - the page's one deliberate color moment on
+              its single most important piece of real estate, instead of
+              flat text on flat background. Ties back to the same green
+              identity as .ai-glow just below rather than inventing a new
+              decorative color. Purely atmospheric: aria-hidden, no pointer
+              events, sits behind the text. */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: -140,
+              right: -60,
+              width: 460,
+              height: 460,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(15,138,75,0.14) 0%, rgba(15,138,75,0) 70%)',
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, position: 'relative', zIndex: 1 }}>
             <div>
               <p style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', margin: '0 0 8px' }}>{dateStr}</p>
               <h1 className="font-display" style={{ fontSize: 'clamp(28px,5vw,52px)', fontWeight: 800, color: '#0A0E1A', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>Good {timeOfDay}, {greetingName}.</h1>
@@ -1058,10 +1093,11 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                 <button className="ms-blue-btn" onClick={() => handleDomainClick('partners')} style={{ padding: '7px 14px' }}>
                   See the {overduePartnersCount} late partner{overduePartnersCount === 1 ? '' : 's'}
                 </button>
-                <button className="ghost-btn" onClick={() => { window.location.href = '/drill/lapsed-approvals' }} style={{ padding: '7px 14px' }}>
+                <Link href="/drill/lapsed-approvals" className="ghost-btn" style={{ padding: '7px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                   Open the {lapsedApprovalsCount} approval{lapsedApprovalsCount === 1 ? '' : 's'} waiting on you
-                </button>
+                </Link>
                 <button className="ghost-btn" onClick={downloadReport} style={{ padding: '7px 14px' }}>Generate board report</button>
+                <a href="#risk-center" className="ghost-btn" style={{ padding: '7px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Go to Risk Center →</a>
               </div>
             </div>
           </div>
@@ -1069,9 +1105,17 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
         </div>
 
         {/* ── Risk Center ────────────────────────────────────────────────── */}
-        <div className="enterprise-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
+        {/* No outer card here, deliberately - this section already contains
+            its own grid of real, individually elevated risk cards below,
+            same as Business Domains contains its own domain cards. Wrapping
+            that grid in another white/border/shadow card on top would be a
+            card-of-cards: the exact "identical card grids repeated
+            everywhere" pattern the rest of the page was starting to fall
+            into. The header sits directly on the page background instead,
+            matching how the Business Domains header already works. */}
+        <div id="risk-center" style={{ marginBottom: 20, scrollMarginTop: 72 }}>
           {/* Header */}
-          <div style={{ padding: '22px 28px 18px', borderBottom: '1px solid rgba(10,14,26,0.06)' }}>
+          <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 3 }}>Live Business Issues</div>
@@ -1089,7 +1133,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                         padding: '4px 12px',
                         borderRadius: 20,
                         border: riskFilter === f ? `1.5px solid ${color}` : '1px solid rgba(10,14,26,0.1)',
-                        background: riskFilter === f ? `${color}0D` : 'transparent',
+                        background: riskFilter === f ? `${color}0D` : 'white',
                         color: riskFilter === f ? color : '#6B7A94',
                         fontSize: 12,
                         fontWeight: riskFilter === f ? 700 : 400,
@@ -1104,7 +1148,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                 </div>
                 <div className="hidden sm:block" style={{ width: 1, height: 20, background: 'rgba(10,14,26,0.1)' }} />
                 <div ref={recommendRef} style={{ position: 'relative' }}>
-                  <button className="ghost-btn" onClick={() => setRecommendOpen((v) => !v)} style={{ padding: '4px 12px', fontSize: 12 }}>✦ Recommend Actions</button>
+                  <button className="ghost-btn" style={{ padding: '4px 12px', fontSize: 12, background: 'white' }} onClick={() => setRecommendOpen((v) => !v)}>✦ Recommend Actions</button>
                   {recommendOpen && (
                     <div className="dropdown-pop" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, background: 'white', border: '1px solid rgba(10,14,26,0.08)', borderRadius: 10, boxShadow: '0 8px 24px rgba(10,14,26,0.12)', padding: 12, zIndex: 30 }}>
                       {mostUrgentRisk ? (
@@ -1144,7 +1188,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               grouping stays by severity here since the two are independent -
               a tier header only appears when the filtered set actually spans
               more than one severity. */}
-          <div style={{ padding: '20px 28px 24px' }}>
+          <div>
             {filteredRisks.length === 0 && (
               <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#6B7A94', fontFamily: 'Inter' }}>No items match this filter.</div>
             )}
@@ -1206,8 +1250,8 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                           >
                             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: pc.dot }} />
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                              <span style={{ width: 30, height: 30, borderRadius: 8, background: `${pc.dot}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: pc.text, flexShrink: 0 }}>
-                                {RISK_SOURCE_ICON[risk.subtitle] ?? '◆'}
+                              <span style={{ width: 30, height: 30, borderRadius: 8, background: `${pc.dot}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: pc.text, flexShrink: 0 }}>
+                                {(() => { const Icon = RISK_SOURCE_ICON[risk.subtitle] ?? Landmark; return <Icon size={15} strokeWidth={2} /> })()}
                               </span>
                               <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, fontFamily: 'Inter', background: ss.bg, color: ss.text, flexShrink: 0 }}>{ss.label}</span>
                             </div>
@@ -1234,8 +1278,9 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
             })()}
           </div>
 
-          {/* Footer */}
-          <div style={{ padding: '12px 28px', borderTop: '1px solid rgba(10,14,26,0.06)', background: '#FAFBFD', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          {/* Footer - a plain hairline rule, not a filled bar, since there's
+              no card edge underneath it to anchor a footer strip to. */}
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(10,14,26,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>Showing {filteredRisks.length} of {risks.length} items · Data as of {asOfLabel}</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="ghost-btn" onClick={() => setShowResolvedOnly((v) => !v)} style={{ padding: '4px 12px', fontSize: 12 }}>
@@ -1257,31 +1302,39 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
             {domains.map((domain) => {
+              // Status chip is keyed off tileStatusTone, same real threshold
+              // field the "Where things stand" card above uses - the two
+              // cards must never disagree on THAT. But headline/body here
+              // deliberately pull a different real KPI and the fuller
+              // analysis paragraph, rather than repeating the tile's own
+              // headline verbatim - this card's job is "why would I open the
+              // workspace", not a rerun of the summary above it.
               const statusColors = { healthy: '#059669', attention: '#D97706', critical: '#DC2626' }
-              const statusLabels = { healthy: 'Healthy', attention: 'Needs Attention', critical: 'Critical' }
+              const statusChipLabels = { healthy: 'On track', attention: 'Watch', critical: 'Needs attention' }
+              const headlineKpi = domain.kpis.find((k) => k.key === DOMAIN_HEADLINE_KPI_KEY[domain.key]) ?? domain.kpis[0]
               return (
                 <div key={domain.key} className="domain-card" onClick={() => setActiveWorkspace(domain)} style={{ padding: 22 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: '#0F8A4B' }}>{domain.icon}</div>
+                      <div style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F8A4B' }}>
+                        {(() => { const Icon = DOMAIN_ICON_COMPONENT[domain.key]; return <Icon size={18} strokeWidth={2} /> })()}
+                      </div>
                       <div>
                         <div className="font-display" style={{ fontSize: 14, fontWeight: 700, color: '#0A0E1A' }}>{domain.label}</div>
                         <div style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter', marginTop: 1 }}>{DOMAIN_TAGLINES[domain.key]}</div>
                       </div>
                     </div>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: statusColors[domain.status], background: `${statusColors[domain.status]}10`, border: `1px solid ${statusColors[domain.status]}25`, borderRadius: 6, padding: '2px 8px', fontFamily: 'Inter', flexShrink: 0 }}>
-                      <StatusDot status={domain.status} />{statusLabels[domain.status]}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: statusColors[domain.tileStatusTone], background: `${statusColors[domain.tileStatusTone]}10`, border: `1px solid ${statusColors[domain.tileStatusTone]}25`, borderRadius: 6, padding: '2px 8px', fontFamily: 'Inter', flexShrink: 0 }}>
+                      <StatusDot status={domain.tileStatusTone} />{statusChipLabels[domain.tileStatusTone]}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
-                    <span className="font-display" style={{ fontSize: 32, fontWeight: 800, color: '#0A0E1A', letterSpacing: '-0.03em' }}>{domain.score}</span>
-                    <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>/100</span>
-                    <span style={{ marginLeft: 4 }}><TrendIcon dir={domain.trend} value={domain.trendValue} /></span>
-                  </div>
-                  <div style={{ height: 3, background: '#EEF2F7', borderRadius: 2, overflow: 'hidden', marginBottom: 14 }}>
-                    <div style={{ height: '100%', width: `${domain.score}%`, background: domain.status === 'healthy' ? '#059669' : domain.status === 'attention' ? '#0F8A4B' : '#DC2626', borderRadius: 2 }} />
-                  </div>
-                  <p style={{ fontSize: 12, color: '#6B7A94', lineHeight: 1.6, margin: '0 0 14px', fontFamily: 'Inter', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{domain.aiSummary}</p>
+                  {headlineKpi && (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+                      <span className="font-display" style={{ fontSize: 24, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em' }}>{headlineKpi.value}</span>
+                      <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>{headlineKpi.label}</span>
+                    </div>
+                  )}
+                  <p style={{ fontSize: 12, color: '#6B7A94', lineHeight: 1.6, margin: '0 0 14px', fontFamily: 'Inter', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{domain.aiSummary}</p>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <AiBadge />
                     <span style={{ fontSize: 12, color: '#0F8A4B', fontWeight: 500, fontFamily: 'Inter' }}>Open Workspace →</span>

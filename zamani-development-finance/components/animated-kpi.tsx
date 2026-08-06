@@ -37,10 +37,10 @@ function useCountUpText(value: string): { display: string; ref: React.RefObject<
   return { display, ref };
 }
 
-export function AnimatedNumber({ value, className }: { value: string; className?: string }) {
+export function AnimatedNumber({ value, className, style }: { value: string; className?: string; style?: React.CSSProperties }) {
   const { display, ref } = useCountUpText(value);
   return (
-    <span ref={ref} className={className} style={{ fontVariantNumeric: "tabular-nums" }}>
+    <span ref={ref} className={className} style={{ fontVariantNumeric: "tabular-nums", ...style }}>
       {display}
     </span>
   );

@@ -10,7 +10,7 @@ export default async function Par30Drill() {
       crumbs={[{ label: "Executive Overview", href: "/" }, { label: "Portfolio health — PAR30" }]}
       title="Portfolio health — PAR30"
       subtitle={`${totalCount.toLocaleString()} instalments 30+ days overdue, ${totalOutstanding} outstanding — grouped by partner institution`}
-      sourceSystem="Lending Management System"
+      sourceSystem="ZDF (CMS)"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

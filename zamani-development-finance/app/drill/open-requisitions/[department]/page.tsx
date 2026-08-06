@@ -16,7 +16,7 @@ export default async function OpenRequisitionsForDeptDrill({ params }: { params:
       ]}
       title={department}
       subtitle={`${records.length} requisition(s) still in bidding`}
-      sourceSystem="Procurement Portal"
+      sourceSystem="ZDF e-Procurement Portal"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1fr", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

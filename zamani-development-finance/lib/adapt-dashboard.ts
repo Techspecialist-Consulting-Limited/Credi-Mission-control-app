@@ -1,13 +1,6 @@
 import type { ExecutiveOverview } from "./kpis";
 import type { DashboardProps, Domain, DomainKey, Risk, RiskPriority, TimelineEvent } from "@/components/dashboard";
 
-const DOMAIN_ICON: Record<DomainKey, string> = {
-  lending: "◈",
-  finance: "◎",
-  partners: "⬡",
-  procurement: "◇",
-};
-
 const asOfLabelFor = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
@@ -32,17 +25,22 @@ export function adaptDashboardData(data: ExecutiveOverview): DashboardProps {
     return {
       key,
       label: d.label,
-      icon: DOMAIN_ICON[key] ?? "◈",
       score: d.score,
       trend,
       trendValue: d.trendLabel,
       status: d.statusTone === "good" ? "healthy" : d.statusTone === "watch" ? "attention" : "critical",
       aiSummary: d.summary,
       kpis: d.kpis.map((k) => ({
+        key: k.key,
         label: k.label,
         value: k.value,
+        // Arrow direction reflects the actual sign of the number ("+1%" is
+        // always up, never down); trendGood is a separate judgement (is that
+        // direction favourable) and only controls colour - conflating the two
+        // used to produce contradictions like a down arrow next to "+1%".
         delta: k.trendLabel === "—" ? undefined : k.trendLabel,
-        deltaDir: k.trendGood ? "up" : "down",
+        deltaDir: k.trendLabel.startsWith("+") ? "up" : "down",
+        deltaGood: k.trendGood,
         href: KPI_DRILL_HREF[k.key],
       })),
       tileHeadline: d.tileHeadline,

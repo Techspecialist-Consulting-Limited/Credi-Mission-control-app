@@ -439,7 +439,7 @@ export async function getDataSourceOverview(): Promise<{ asOf: string; systems: 
 
   const systems: DataSourceSystem[] = [
     {
-      system: "Lending Management System",
+      system: "ZDF (CMS)",
       tables: [
         { table: "lending_beneficiaries", rows: beneficiaries.length },
         { table: "lending_applications", rows: applications.length },
@@ -450,7 +450,7 @@ export async function getDataSourceOverview(): Promise<{ asOf: string; systems: 
       totalRows: beneficiaries.length + applications.length + approvals.length + disbursements.length + repayments.length,
     },
     {
-      system: "PFI Partner Portal",
+      system: "ZDF PFI Partners Portal",
       tables: [
         { table: "pfi_partners", rows: partners.length },
         { table: "pfi_submissions", rows: submissions.length },
@@ -460,7 +460,7 @@ export async function getDataSourceOverview(): Promise<{ asOf: string; systems: 
       totalRows: partners.length + submissions.length + borrowers.length + portfolioRecords.length,
     },
     {
-      system: "ERP / Finance",
+      system: "Microsoft Dynamics (ERP)",
       tables: [
         { table: "finance_funding_sources", rows: fundingSources.length },
         { table: "finance_drawdowns", rows: drawdowns.length },
@@ -471,7 +471,7 @@ export async function getDataSourceOverview(): Promise<{ asOf: string; systems: 
       totalRows: fundingSources.length + drawdowns.length + budgetLines.length + payments.length + treasuryPositions.length,
     },
     {
-      system: "Procurement Portal",
+      system: "ZDF e-Procurement Portal",
       tables: [
         { table: "procurement_vendors", rows: vendors.length },
         { table: "procurement_compliance_documents", rows: complianceDocs.length },

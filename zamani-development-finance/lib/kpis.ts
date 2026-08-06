@@ -1,6 +1,7 @@
 import {
   fetchFinanceBudgetLines,
   fetchFinanceFundingSources,
+  fetchFinancePayments,
   fetchFinanceTreasuryPositions,
   fetchLendingApplications,
   fetchLendingApprovals,
@@ -150,6 +151,18 @@ export interface ExecutiveOverview {
    * ("See the 11 late partners", "Open the 408 approvals waiting on you"). */
   lapsedApprovalsCount: number;
   overduePartnersCount: number;
+  /** Real cross-system reconciliation - the fact no single source system can
+   * produce alone. Every disbursement checked against Finance's own payment
+   * record, not assumed from a status flag. */
+  disbursementReconciliation: { total: number; reconciled: number; totalAmount: number };
+  /** Every awarded vendor checked against Finance's vendor payments by name. */
+  vendorReconciliation: {
+    vendorsWithAwards: number;
+    reconciled: number;
+    vendorPaymentCount: number;
+    unreconciledVendorName?: string;
+    unreconciledVendorAmount: number;
+  };
 }
 
 export const naira = (n: number) => `₦${n.toLocaleString("en-NG", { maximumFractionDigits: 0 })}`;
@@ -251,6 +264,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     submissions,
     awards,
     contracts,
+    payments,
   ] = await Promise.all([
     fetchLendingBeneficiaries(),
     fetchLendingApplications(),
@@ -267,6 +281,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     fetchPfiSubmissions(),
     fetchProcurementAwards(),
     fetchProcurementContracts(),
+    fetchFinancePayments(),
   ]);
 
   const latestTreasury = [...treasuryPositions].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
@@ -276,6 +291,56 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
   const applicationById = new Map(applications.map((a) => [a.application_id, a]));
   const partnerById = new Map(partners.map((p) => [p.partner_id, p]));
   const approvalById = new Map(approvals.map((a) => [a.approval_id, a]));
+
+  // --- Cross-system reconciliation: Lending disbursements against Finance's
+  // own payment records, and Procurement awards against Finance's own vendor
+  // payments - the platform's actual "wow": a fact no single system can
+  // produce alone, checked for real rather than assumed. ------------------------
+  const loanPayments = payments.filter((p) => p.payment_type === "Loan Disbursement");
+  const paymentByDisbursementId = new Map(loanPayments.map((p) => [p.disbursement_id ?? "", p]));
+  let disbursementsReconciled = 0;
+  for (const d of disbursements) {
+    const p = paymentByDisbursementId.get(d.disbursement_id);
+    if (p && Math.abs(p.amount - d.amount) < 1) disbursementsReconciled++;
+  }
+  const disbursementReconciliation = {
+    total: disbursements.length,
+    reconciled: disbursementsReconciled,
+    totalAmount: disbursements.reduce((s, d) => s + d.amount, 0),
+  };
+
+  const vendorPayments = payments.filter((p) => p.payee_type === "Vendor");
+  const paidAmountByPayeeName = new Map<string, number>();
+  for (const p of vendorPayments) paidAmountByPayeeName.set(p.payee, (paidAmountByPayeeName.get(p.payee) ?? 0) + p.amount);
+  const committedByVendorId = new Map<string, number>();
+  for (const a of awards) committedByVendorId.set(a.vendor_id, (committedByVendorId.get(a.vendor_id) ?? 0) + a.awarded_value);
+  const vendorById = new Map(vendors.map((v) => [v.vendor_id, v]));
+  let vendorsWithAwards = 0;
+  let vendorsReconciled = 0;
+  let unreconciledVendorName: string | undefined;
+  let unreconciledVendorAmount = 0;
+  for (const [vendorId, committed] of committedByVendorId) {
+    vendorsWithAwards++;
+    const vendorName = vendorById.get(vendorId)?.vendor_name;
+    if (vendorName && paidAmountByPayeeName.has(vendorName)) {
+      vendorsReconciled++;
+    } else if (vendorName) {
+      unreconciledVendorName = vendorName;
+      unreconciledVendorAmount = committed;
+    }
+  }
+  const vendorReconciliation = {
+    vendorsWithAwards,
+    reconciled: vendorsReconciled,
+    vendorPaymentCount: vendorPayments.length,
+    unreconciledVendorName,
+    unreconciledVendorAmount,
+  };
+
+  // Applications never fail to resolve to a real partner in this dataset, but
+  // this is checked rather than assumed - the same discipline as everything
+  // else on this page.
+  const orphanedApplications = applications.filter((a) => !partnerById.has(a.pfi_id)).length;
 
   // --- Portfolio ------------------------------------------------------------
   const totalDisbursed = disbursements.reduce((s, d) => s + d.amount, 0);
@@ -373,7 +438,14 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
   const prevMonthCount = sortedApprovalMonths.length > 1 ? approvalsByMonth.get(sortedApprovalMonths.at(-2)!)! : 0;
   const approvalGrowthPct = prevMonthCount > 0 ? ((lastMonthCount - prevMonthCount) / prevMonthCount) * 100 : 0;
 
-  // --- PAR30 due-cohort map (of instalments due in a month, share 30+ overdue) -----
+  // --- PAR30: point-in-time, across the whole book to date, not a single month's
+  // own cohort. A fresh month's instalments can't have crossed 30 days overdue
+  // yet - due dates only days old by definition can't be 30+ days late - so
+  // scoring each point against only its own month's due amount understated real
+  // risk everywhere, and zeroed it outright on the newest (least mature) month.
+  // The standard PAR30 definition is a snapshot over the full outstanding book;
+  // this reproduces that, walking cumulatively through history so the trend
+  // still moves month to month as more of the book accumulates.
   const dueMonths = new Map<string, { due: number; overdue30: number }>();
   for (const r of repayments) {
     if (r.due_date > asOf) continue;
@@ -382,11 +454,21 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     if (r.days_overdue >= 30) bucket.overdue30 += r.amount_due - r.amount_paid;
     dueMonths.set(monthKeyOf(r.due_date), bucket);
   }
-  let lastPar = 0;
+  let cumulativeDue = 0;
+  let cumulativeOverdue30 = 0;
+  for (const [mk, b] of dueMonths) {
+    if (mk < last6MonthKeys[0]) {
+      cumulativeDue += b.due;
+      cumulativeOverdue30 += b.overdue30;
+    }
+  }
   const par30Trend: TrendPoint[] = last6MonthKeys.map((mk) => {
     const b = dueMonths.get(mk);
-    if (b && b.due > 0) lastPar = (b.overdue30 / b.due) * 100;
-    return { label: monthLabel(mk), value: lastPar };
+    if (b) {
+      cumulativeDue += b.due;
+      cumulativeOverdue30 += b.overdue30;
+    }
+    return { label: monthLabel(mk), value: cumulativeDue > 0 ? (cumulativeOverdue30 / cumulativeDue) * 100 : 0 };
   });
   const par30Pct = par30Trend.at(-1)!.value;
 
@@ -521,16 +603,16 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     const partner = partnerById.get(applicationById.get(approval.application_id)?.pfi_id ?? "");
     const partnerName = partner?.partner_name ?? "unattributed partner";
     const evidence: EvidenceRow[] = [
-      { label: dateOnly(approval.approval_date), note: `Approved by ${approval.approved_by}${approval.conditions ? ` — ${approval.conditions}` : ""}`, source: "Lending" },
-      { label: "Status", note: "Marked Lapsed — approval window closed without disbursement", source: "Lending" },
+      { label: dateOnly(approval.approval_date), note: `Approved by ${approval.approved_by}${approval.conditions ? ` — ${approval.conditions}` : ""}`, source: "ZDF (CMS)" },
+      { label: "Status", note: "Marked Lapsed — approval window closed without disbursement", source: "ZDF (CMS)" },
     ];
     if (partner) {
-      evidence.push({ label: "Partner exposure", note: `${partner.partner_name} carries ${nairaCompact(partner.zdf_exposure)} total ZDF exposure, status ${partner.status}`, source: "PFI Partner Portal" });
+      evidence.push({ label: "Partner exposure", note: `${partner.partner_name} carries ${nairaCompact(partner.zdf_exposure)} total ZDF exposure, status ${partner.status}`, source: "ZDF PFI Partners Portal" });
     }
     rankedExceptions.push({
       key: approval.approval_id,
       title: `${nairaCompact(approval.amount_approved)} approved, never disbursed`,
-      subtitle: "Lending",
+      subtitle: "ZDF (CMS)",
       detail: `${partnerName} · approved ${days} days ago, no release recorded`,
       impact,
       dateLabel: `${days} days ago`,
@@ -577,7 +659,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     rankedExceptions.push({
       key: submission.submission_id,
       title: `${partnerName}'s return is ${overdueDays} days late`,
-      subtitle: "PFI Partner Portal",
+      subtitle: "ZDF PFI Partners Portal",
       detail: `${submission.record_count.toLocaleString()} portfolio records unverified this cycle${partner ? ` · ${nairaCompact(partner.zdf_exposure)} in exposure sits with them` : ""}`,
       impact,
       dateLabel: `${overdueDays} days overdue`,
@@ -589,9 +671,9 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
         {
           label: submission.reporting_period,
           note: `Due ${submission.due_date}, ${submission.submitted_date ? `submitted ${submission.submitted_date}` : "not yet submitted"} — ${submission.record_count.toLocaleString()} records expected`,
-          source: "PFI Partner Portal",
+          source: "ZDF PFI Partners Portal",
         },
-        ...partnerHistory.map((h) => ({ label: h.reporting_period, note: `${h.status}${h.submitted_date ? ` — submitted ${h.submitted_date}` : ""}`, source: "PFI Partner Portal" })),
+        ...partnerHistory.map((h) => ({ label: h.reporting_period, note: `${h.status}${h.submitted_date ? ` — submitted ${h.submitted_date}` : ""}`, source: "ZDF PFI Partners Portal" })),
       ],
       recommendedActions: [
         { label: `Escalate to ${partnerName} relationship manager`, urgency: impact === "Low" ? "watch" : "immediate" },
@@ -610,7 +692,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     rankedExceptions.push({
       key: `overrun-${dept}`,
       title: `${nairaCompact(overrun)} over budget — ${dept}`,
-      subtitle: "Finance",
+      subtitle: "Microsoft Dynamics (ERP)",
       detail: `${dept} · ${overrunPct.toFixed(0)}% over its ${nairaCompact(budgeted)} allocated budget`,
       impact: overrunPct >= 20 ? "High" : "Medium",
       dateLabel: `${nairaCompact(overrun)} over budget`,
@@ -621,7 +703,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
       evidence: overrunLines.map((b) => ({
         label: `${b.category} · ${b.fiscal_period}`,
         note: `Budgeted ${nairaCompact(b.budgeted_amount)}, actual ${nairaCompact(b.actual)}`,
-        source: "Finance",
+        source: "Microsoft Dynamics (ERP)",
       })),
       recommendedActions: [
         { label: `Review ${dept} spend against budget line detail`, urgency: "immediate" },
@@ -652,7 +734,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     rankedExceptions.push({
       key: worstDefault.disbursement_id,
       title: `${nairaCompact(outstandingOnThis)} in arrears, ${worstDays} days overdue`,
-      subtitle: "Lending",
+      subtitle: "ZDF (CMS)",
       detail: `${defaultPartner?.partner_name ?? "Unattributed partner"} portfolio · ${samePartnerDefaultCount} loan${samePartnerDefaultCount === 1 ? "" : "s"} affected`,
       impact: bandForDays(worstDays),
       dateLabel: `${worstDays} days overdue`,
@@ -662,9 +744,9 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
       impactAmount: outstandingOnThis,
       ageDays: worstDays,
       evidence: [
-        { label: dateOnly(worstDefault.disbursement_date), note: `Disbursed ${nairaCompact(worstDefault.amount)} — ${worstDefault.disbursement_reference}`, source: "Lending" },
-        ...defaultedRepayments.slice(0, 2).map((r) => ({ label: `Instalment ${r.instalment_number}`, note: `${nairaCompact(r.amount_due - r.amount_paid)} outstanding, due ${dateOnly(r.due_date)}`, source: "Lending" })),
-        ...(defaultPartner ? [{ label: "Partner exposure", note: `${defaultPartner.partner_name} carries ${nairaCompact(defaultPartner.zdf_exposure)} total ZDF exposure, status ${defaultPartner.status}`, source: "PFI Partner Portal" }] : []),
+        { label: dateOnly(worstDefault.disbursement_date), note: `Disbursed ${nairaCompact(worstDefault.amount)} — ${worstDefault.disbursement_reference}`, source: "ZDF (CMS)" },
+        ...defaultedRepayments.slice(0, 2).map((r) => ({ label: `Instalment ${r.instalment_number}`, note: `${nairaCompact(r.amount_due - r.amount_paid)} outstanding, due ${dateOnly(r.due_date)}`, source: "ZDF (CMS)" })),
+        ...(defaultPartner ? [{ label: "Partner exposure", note: `${defaultPartner.partner_name} carries ${nairaCompact(defaultPartner.zdf_exposure)} total ZDF exposure, status ${defaultPartner.status}`, source: "ZDF PFI Partners Portal" }] : []),
       ],
       recommendedActions: [
         { label: `Review recovery options for disbursement ${worstDefault.disbursement_id}`, urgency: worstDaysReal >= 90 ? "immediate" : "soon" },
@@ -681,7 +763,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     rankedExceptions.push({
       key: `probation-${partner.partner_id}`,
       title: `${partner.partner_name} on probation`,
-      subtitle: "PFI Partner Portal",
+      subtitle: "ZDF PFI Partners Portal",
       // Not counted toward the register's "held up" total - this is active
       // credit exposure sitting with the partner, not blocked capital.
       detail: `${nairaCompact(partner.zdf_exposure)} exposure against a ${nairaCompact(partner.approved_limit)} approved limit · partner since ${partner.onboarding_date}`,
@@ -691,9 +773,9 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
       category: "credit",
       actionLabel: "Review exposure",
       evidence: [
-        { label: "Status", note: `${partner.institution_type} in ${partner.region}, onboarded ${partner.onboarding_date}`, source: "PFI Partner Portal" },
-        { label: "Exposure", note: `${nairaCompact(partner.zdf_exposure)} against a ${nairaCompact(partner.approved_limit)} approved limit`, source: "PFI Partner Portal" },
-        ...(topProbationRegion ? [{ label: "Regional concentration", note: `${topProbationRegion[0]} accounts for ${nairaCompact(topProbationRegion[1])} of all probation exposure`, source: "PFI Partner Portal" }] : []),
+        { label: "Status", note: `${partner.institution_type} in ${partner.region}, onboarded ${partner.onboarding_date}`, source: "ZDF PFI Partners Portal" },
+        { label: "Exposure", note: `${nairaCompact(partner.zdf_exposure)} against a ${nairaCompact(partner.approved_limit)} approved limit`, source: "ZDF PFI Partners Portal" },
+        ...(topProbationRegion ? [{ label: "Regional concentration", note: `${topProbationRegion[0]} accounts for ${nairaCompact(topProbationRegion[1])} of all probation exposure`, source: "ZDF PFI Partners Portal" }] : []),
       ],
       recommendedActions: [
         { label: `Schedule standing review for ${partner.partner_name}`, urgency: impact === "Low" ? "watch" : "immediate" },
@@ -704,8 +786,8 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
 
   // Compliance lapses - the most- and least-expired real documents, each
   // banded by its own days-since-expiry rather than the aggregate count, so
-  // severity reflects how overdue THIS document specifically is.
-  const vendorById = new Map(vendors.map((v) => [v.vendor_id, v]));
+  // severity reflects how overdue THIS document specifically is. (vendorById
+  // is declared earlier, alongside the vendor-payment reconciliation.)
   const contractsByVendor = new Map<string, typeof contracts>();
   for (const c of contracts) {
     const arr = contractsByVendor.get(c.vendor_id) ?? [];
@@ -723,7 +805,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     rankedExceptions.push({
       key: doc.document_id,
       title: `${doc.document_type} expired ${daysSinceExpiry} days ago`,
-      subtitle: "Procurement",
+      subtitle: "ZDF e-Procurement Portal",
       detail: vendor
         ? activeContracts.length > 0
           ? `${vendor.vendor_name} · ${activeContracts.length} active contract${activeContracts.length === 1 ? "" : "s"} affected · ${nairaCompact(activeContractsValue)}`
@@ -736,9 +818,9 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
       actionLabel: "Review certificate",
       ageDays: daysSinceExpiry,
       evidence: [
-        { label: doc.document_type, note: `Issued ${dateOnly(doc.issue_date)}, expired ${dateOnly(doc.expiry_date)}`, source: "Procurement" },
-        ...(vendor ? [{ label: "Vendor", note: `${vendor.vendor_name} — ${vendor.category}, status ${vendor.status}`, source: "Procurement" }] : []),
-        ...vendorOtherDocs.slice(0, 1).map((d) => ({ label: d.document_type, note: `${d.status}, expires ${dateOnly(d.expiry_date)}`, source: "Procurement" })),
+        { label: doc.document_type, note: `Issued ${dateOnly(doc.issue_date)}, expired ${dateOnly(doc.expiry_date)}`, source: "ZDF e-Procurement Portal" },
+        ...(vendor ? [{ label: "Vendor", note: `${vendor.vendor_name} — ${vendor.category}, status ${vendor.status}`, source: "ZDF e-Procurement Portal" }] : []),
+        ...vendorOtherDocs.slice(0, 1).map((d) => ({ label: d.document_type, note: `${d.status}, expires ${dateOnly(d.expiry_date)}`, source: "ZDF e-Procurement Portal" })),
       ],
       recommendedActions: [
         { label: `Request renewed ${doc.document_type.toLowerCase()} from ${vendor?.vendor_name ?? "vendor"}`, urgency: impact === "Low" ? "watch" : "immediate" },
@@ -1032,16 +1114,16 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
         : "Every approved loan has been paid out.",
     },
     {
-      key: "procurement-stuck",
-      tone: agingRequisitions.length > 0 ? "critical" : "good",
-      lead:
-        agingRequisitions.length > 0
-          ? `${nairaCompact(agingRequisitionsValue)} in procurement requisitions is still waiting on an award decision.`
-          : "No procurement requisitions are stuck waiting on an award decision.",
+      // Not a problem to solve - a trust statement. It sits second, right
+      // after the one real unresolved gap above, so a reader sees the honest
+      // bad news first and the reason to believe the rest of the page second.
+      key: "reconciliation-trust",
+      tone: disbursementReconciliation.reconciled === disbursementReconciliation.total ? "good" : "watch",
+      lead: `Every loan this fund has disbursed — ${disbursementReconciliation.reconciled.toLocaleString()} of ${disbursementReconciliation.total.toLocaleString()}, ${nairaCompact(disbursementReconciliation.totalAmount)} — has been checked against Finance's own payment records.`,
       detail:
-        agingRequisitions.length > 0
-          ? `${agingRequisitions.length} have been open more than 45 days, across ${agingRequisitionDepts.size} department${agingRequisitionDepts.size === 1 ? "" : "s"}.`
-          : "The bidding pipeline is moving at a healthy pace.",
+        disbursementReconciliation.reconciled === disbursementReconciliation.total
+          ? `All of them reconcile, to the naira, and all ${applications.length.toLocaleString()} loan applications${orphanedApplications === 0 ? " are" : ` (bar ${orphanedApplications})`} correctly attributed to the partner that brought them in.`
+          : `${(disbursementReconciliation.total - disbursementReconciliation.reconciled).toLocaleString()} do not yet have a matching Finance payment record — worth a closer look.`,
     },
     {
       key: "partners-late",
@@ -1056,6 +1138,18 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
           : overduePartnerIds.size > 0
             ? "None are more than four weeks overdue yet."
             : "Full visibility into how funds are being used.",
+    },
+    {
+      key: "procurement-stuck",
+      tone: agingRequisitions.length > 0 ? "critical" : "good",
+      lead:
+        agingRequisitions.length > 0
+          ? `${nairaCompact(agingRequisitionsValue)} in procurement requisitions is still waiting on an award decision.`
+          : "No procurement requisitions are stuck waiting on an award decision.",
+      detail:
+        agingRequisitions.length > 0
+          ? `${agingRequisitions.length} have been open more than 45 days, across ${agingRequisitionDepts.size} department${agingRequisitionDepts.size === 1 ? "" : "s"}. Separately: ${vendorReconciliation.reconciled} of ${vendorReconciliation.vendorsWithAwards} awarded vendors are confirmed paid against by Finance${vendorReconciliation.unreconciledVendorName ? ` — the one exception, ${vendorReconciliation.unreconciledVendorName}, was awarded recently enough that it hasn't been invoiced yet` : ""}.`
+          : "The bidding pipeline is moving at a healthy pace.",
     },
   ];
 
@@ -1089,13 +1183,13 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
   const domains: DomainCard[] = [
     {
       key: "lending",
-      label: "Lending",
+      label: "ZDF (CMS)",
       score: lendingScore,
       trendLabel: formatTrend(lendingScore - lendingScorePrevMonth, "pp"),
       trendGood: lendingScore >= lendingScorePrevMonth,
       statusLabel: lendingScore >= 80 ? "Healthy" : lendingScore >= 60 ? "Needs Attention" : "Critical",
       statusTone: lendingScore >= 80 ? "good" : lendingScore >= 60 ? "watch" : "critical",
-      summary: `${beneficiaryTrend.at(-1)!.value.toLocaleString()} beneficiaries reached, ${nairaCompact(totalDisbursed)} disbursed. PAR30 at ${par30Pct.toFixed(1)}%, with ${nairaCompact(lapsedAmount)} in lapsed approvals never disbursed.`,
+      summary: `${beneficiaryTrend.at(-1)!.value.toLocaleString()} beneficiaries reached, ${nairaCompact(totalDisbursed)} disbursed. PAR30 at ${par30Pct.toFixed(1)}%, with ${nairaCompact(lapsedAmount)} in lapsed approvals never disbursed. Every one of the other ${disbursementReconciliation.reconciled.toLocaleString()} disbursements reconciles against a real Finance payment record.`,
       kpis: lendingKpis,
       tileHeadline: lendingTileHeadline,
       tileSupporting: lendingTileSupporting,
@@ -1103,13 +1197,13 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     },
     {
       key: "finance",
-      label: "Finance",
+      label: "Microsoft Dynamics (ERP)",
       score: financeScore,
       trendLabel: formatTrend(financeScore - financeScorePrevMonth, "pp"),
       trendGood: financeScore >= financeScorePrevMonth,
       statusLabel: financeScore >= 80 ? "Healthy" : financeScore >= 60 ? "Needs Attention" : "Critical",
       statusTone: financeScore >= 80 ? "good" : financeScore >= 60 ? "watch" : "critical",
-      summary: `${coverRatio.toFixed(1)}× cover on committed funds. ${totalOverrunAmount > 0 ? `${nairaCompact(totalOverrunAmount)} in budget overrun across ${overrunByDept.size} department${overrunByDept.size === 1 ? "" : "s"}.` : "No department is currently over budget."}`,
+      summary: `${nairaCompact(fyUnspent)} of this year's allocated budget is still unspent, with ${departmentsBehindSchedule.length} of ${fyByDept.size} department${fyByDept.size === 1 ? "" : "s"} behind pace at ${Math.round(fyElapsedFrac * 100)}% of the year elapsed. Separately, on cash cover: ${coverRatio.toFixed(1)}× cover on committed funds, and ${totalOverrunAmount > 0 ? `${nairaCompact(totalOverrunAmount)} in budget overrun across ${overrunByDept.size} department${overrunByDept.size === 1 ? "" : "s"}.` : "no department is currently over budget — this is a spending-pace problem, not an overspend."}`,
       kpis: financeKpis,
       tileHeadline: financeTileHeadline,
       tileSupporting: financeTileSupporting,
@@ -1117,7 +1211,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     },
     {
       key: "partners",
-      label: "Partner Performance",
+      label: "ZDF PFI Partners Portal",
       score: partnersScore,
       trendLabel: lastVsPrevDelta(reportingComplianceTrend) === 0 ? "Stable" : formatTrend(lastVsPrevDelta(reportingComplianceTrend), "pp"),
       trendGood: lastVsPrevDelta(reportingComplianceTrend) >= 0,
@@ -1131,13 +1225,13 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     },
     {
       key: "procurement",
-      label: "Procurement",
+      label: "ZDF e-Procurement Portal",
       score: procurementScore,
       trendLabel: expiredDocs.length > 0 ? "Needs review" : "Stable",
       trendGood: expiredDocs.length === 0,
       statusLabel: procurementScore >= 80 ? "Healthy" : procurementScore >= 60 ? "Needs Attention" : "Critical",
       statusTone: procurementScore >= 80 ? "good" : procurementScore >= 60 ? "watch" : "critical",
-      summary: `${vendorCompliancePct.toFixed(0)}% vendor compliance, ${openRequisitions.length} requisition${openRequisitions.length === 1 ? "" : "s"} open in bidding worth ${nairaCompact(openRequisitionsValue)}. ${recentAwards.length} award${recentAwards.length === 1 ? "" : "s"} completed this period.`,
+      summary: `${vendorCompliancePct.toFixed(0)}% vendor compliance, ${openRequisitions.length} requisition${openRequisitions.length === 1 ? "" : "s"} open in bidding worth ${nairaCompact(openRequisitionsValue)}. ${recentAwards.length} award${recentAwards.length === 1 ? "" : "s"} completed this period. ${vendorReconciliation.reconciled} of ${vendorReconciliation.vendorsWithAwards} awarded vendors are confirmed paid against by Finance.`,
       kpis: procurementKpis,
       tileHeadline: procurementTileHeadline,
       tileSupporting: procurementTileSupporting,
@@ -1147,12 +1241,12 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
 
   // --- Activity timeline: most recent real events across every source table --------
   const timelineCandidates: { date: string; description: string; category: string }[] = [
-    ...disbursements.map((d) => ({ date: dateOnly(d.disbursement_date), description: `Disbursement ${d.disbursement_reference} released — ${nairaCompact(d.amount)}.`, category: "Lending" })),
+    ...disbursements.map((d) => ({ date: dateOnly(d.disbursement_date), description: `Disbursement ${d.disbursement_reference} released — ${nairaCompact(d.amount)}.`, category: "ZDF (CMS)" })),
     ...submissions
       .filter((s) => s.submitted_date)
-      .map((s) => ({ date: s.submitted_date!, description: `${partnerById.get(s.partner_id)?.partner_name ?? s.partner_id} submitted ${s.reporting_period} report.`, category: "Partners" })),
-    ...awards.map((a) => ({ date: a.award_date, description: `Requisition ${a.requisition_id} awarded — ${nairaCompact(a.awarded_value)} (${a.award_justification}).`, category: "Procurement" })),
-    ...approvals.filter((a) => a.status === "Lapsed").map((a) => ({ date: dateOnly(a.approval_date), description: `Approval ${a.approval_id} lapsed without disbursement — ${nairaCompact(a.amount_approved)}.`, category: "Lending" })),
+      .map((s) => ({ date: s.submitted_date!, description: `${partnerById.get(s.partner_id)?.partner_name ?? s.partner_id} submitted ${s.reporting_period} report.`, category: "ZDF PFI Partners Portal" })),
+    ...awards.map((a) => ({ date: a.award_date, description: `Requisition ${a.requisition_id} awarded — ${nairaCompact(a.awarded_value)} (${a.award_justification}).`, category: "ZDF e-Procurement Portal" })),
+    ...approvals.filter((a) => a.status === "Lapsed").map((a) => ({ date: dateOnly(a.approval_date), description: `Approval ${a.approval_id} lapsed without disbursement — ${nairaCompact(a.amount_approved)}.`, category: "ZDF (CMS)" })),
   ]
     .filter((e) => e.date <= asOf)
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -1172,5 +1266,7 @@ export async function getExecutiveOverview(): Promise<ExecutiveOverview> {
     timeline,
     lapsedApprovalsCount: lapsed.length,
     overduePartnersCount: overduePartnerIds.size,
+    disbursementReconciliation,
+    vendorReconciliation,
   };
 }

@@ -14,7 +14,7 @@ export default async function MandateReachDrill() {
       crumbs={[{ label: "Executive Overview", href: "/" }, { label: "Mandate reach" }]}
       title="Mandate reach — beneficiaries served"
       subtitle={`${totalCount.toLocaleString()} beneficiaries reached to date — grouped by state`}
-      sourceSystem="Lending Management System"
+      sourceSystem="ZDF (CMS)"
     >
       <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12, marginBottom: 20 }}>
         <AnimatedGridItem>

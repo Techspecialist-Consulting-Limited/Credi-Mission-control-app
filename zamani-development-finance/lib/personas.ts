@@ -284,7 +284,11 @@ export async function getCfoOverview(): Promise<PersonaOverview> {
         // as a contradiction.
         statusLabel: overrunAmount === 0 ? "On Track" : utilNow > 110 ? "Critical" : "Monitor",
         statusTone: overrunAmount === 0 ? "good" : utilNow > 110 ? "critical" : "watch",
-        trendLabel: utilTrend.length === 2 ? formatTrend(lastVsPrevDelta(utilTrend), "pp") : "—",
+        // No trend badge here - "closer to/further from the 100% target"
+        // reads as a value judgement that can contradict the status chip
+        // (e.g. a red down-arrow next to a green "On Track" chip), so the
+        // note above carries the real story in words instead.
+        trendLabel: "—",
         trendGood: utilNowDist <= utilPrevDist,
       },
       {
@@ -522,7 +526,7 @@ export async function getProcurementOverview(): Promise<PersonaOverview> {
         icon: "clock",
         statusLabel: avgCycleDays > 35 ? "Critical" : avgCycleDays > 21 ? "Monitor" : "On Track",
         statusTone: avgCycleDays > 35 ? "critical" : avgCycleDays > 21 ? "watch" : "good",
-        trendLabel: Math.round(cycleDeltaDays) === 0 ? "—" : `${cycleDeltaDays >= 0 ? "+" : ""}${cycleDeltaDays.toFixed(0)}d`,
+        trendLabel: "—",
         trendGood: cycleDeltaDays <= 0,
       },
       {
@@ -548,7 +552,7 @@ export async function getProcurementOverview(): Promise<PersonaOverview> {
         icon: "users",
         statusLabel: avgBidders >= 3 ? "On Track" : avgBidders >= 1.5 ? "Monitor" : "Critical",
         statusTone: avgBidders >= 3 ? "good" : avgBidders >= 1.5 ? "watch" : "critical",
-        trendLabel: formatTrend(lastVsPrevPct(competitionTrend), "pct"),
+        trendLabel: "—",
         trendGood: lastVsPrevDelta(competitionTrend) >= 0,
       },
       {
@@ -865,7 +869,7 @@ export async function getIctOverview(): Promise<PersonaOverview> {
       {
         label: "Source systems connected",
         value: "4",
-        note: "Lending, PFI Partner Portal, Finance, Procurement — all 4 planned systems are live.",
+        note: "ZDF (CMS), ZDF PFI Partners Portal, Microsoft Dynamics (ERP), ZDF e-Procurement Portal — all 4 planned systems are live.",
         icon: "database",
         href: "/drill/data-sources",
         statusLabel: "On Track",

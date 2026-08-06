@@ -16,7 +16,7 @@ export default async function BudgetLinesDrill({ params }: { params: Promise<{ d
       ]}
       title={department}
       subtitle={`${records.length} budget line(s)`}
-      sourceSystem="ERP / Finance"
+      sourceSystem="Microsoft Dynamics (ERP)"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1fr", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

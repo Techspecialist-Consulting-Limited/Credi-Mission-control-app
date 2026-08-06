@@ -11,7 +11,7 @@ export default async function OpenRequisitionsDrill() {
       crumbs={[{ label: "Executive Overview", href: "/" }, { label: "Head of Procurement", href: "/persona/procurement" }, { label: "Open pipeline" }]}
       title="Open pipeline — requisitions in bidding"
       subtitle={`${totalCount.toLocaleString()} requisition(s), ${totalValue} in estimated value — grouped by department`}
-      sourceSystem="Procurement Portal"
+      sourceSystem="ZDF e-Procurement Portal"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.3fr 2fr auto auto", gap: 16, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

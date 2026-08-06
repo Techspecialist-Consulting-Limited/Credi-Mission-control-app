@@ -14,7 +14,7 @@ export default async function LapsedApprovalsForPartnerDrill({ params }: { param
       ]}
       title={partnerName}
       subtitle={`${records.length} lapsed approval${records.length === 1 ? "" : "s"} — approved, never disbursed`}
-      sourceSystem="Lending Management System"
+      sourceSystem="ZDF (CMS)"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr 1fr", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

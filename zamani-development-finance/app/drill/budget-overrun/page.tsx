@@ -11,7 +11,7 @@ export default async function BudgetOverrunDrill() {
       crumbs={[{ label: "Executive Overview", href: "/" }, { label: "CFO View", href: "/persona/cfo" }, { label: "Budget vs actual" }]}
       title="Budget vs actual — by department"
       subtitle={`${totalActual} actual against ${totalBudgeted} budgeted, across ${groups.length} department(s)`}
-      sourceSystem="ERP / Finance"
+      sourceSystem="Microsoft Dynamics (ERP)"
     >
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.3fr 2fr auto auto", gap: 16, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>

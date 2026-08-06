@@ -19,7 +19,7 @@ export default async function MandateReachSegmentsDrill({ params }: { params: Pr
       ]}
       title={state}
       subtitle={`${totalCount.toLocaleString()} beneficiaries reached — broken down by sector`}
-      sourceSystem="Lending Management System"
+      sourceSystem="ZDF (CMS)"
     >
       <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12, marginBottom: 20 }}>
         <AnimatedGridItem>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Domain, DomainKey, Risk } from "./dashboard";
 import { DOMAIN_TAGLINES } from "./dashboard";
 
@@ -54,7 +55,7 @@ export function CommandBar({
   activeHref?: string;
 }) {
   const activePersonaLabel = PERSONAS.find((p) => p.href === activeHref)?.label ?? PERSONAS[0].label;
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const router = useRouter();
   const [personaOpen, setPersonaOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -63,16 +64,32 @@ export function CommandBar({
   const personaRef = useClickOutside(() => setPersonaOpen(false));
   const bellRef = useClickOutside(() => setBellOpen(false));
   const searchRef = useClickOutside(() => setSearchFocused(false));
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ⌘K / Ctrl+K jumps straight into search from anywhere on the page - the
+  // accelerator power users expect from a command bar with search + AI ask,
+  // and currently the only way in was a mouse click.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchFocused(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const highPriorityRisks = risks.filter((r) => r.priority === "high");
 
   const searchIndex = useMemo<SearchResult[]>(() => {
     const items: SearchResult[] = [];
     for (const d of domains) {
-      items.push({ kind: "domain", label: d.label, detail: `Domain · Score ${d.score}/100`, action: () => onOpenDomain(d.key) });
+      items.push({ kind: "domain", label: d.label, detail: `Domain · ${d.tileHeadline}`, action: () => onOpenDomain(d.key) });
       for (const kpi of d.kpis) {
         if (!kpi.href) continue;
-        items.push({ kind: "kpi", label: kpi.label, detail: `${d.label} · ${kpi.value}`, action: () => { window.location.href = kpi.href!; } });
+        items.push({ kind: "kpi", label: kpi.label, detail: `${d.label} · ${kpi.value}`, action: () => { router.push(kpi.href!); } });
       }
     }
     for (const r of risks) {
@@ -94,12 +111,10 @@ export function CommandBar({
   const goToDomain = (key: DomainKey) => {
     onOpenDomain(key);
     window.history.replaceState(null, "", `/?domain=${key}`);
-    setMobileOpen(false);
   };
   const goHome = () => {
     onGoHome();
     window.history.replaceState(null, "", "/");
-    setMobileOpen(false);
   };
 
   const runSearchResult = (r: SearchResult) => {
@@ -110,7 +125,7 @@ export function CommandBar({
 
   return (
     <header className="command-bar" style={{ position: "sticky", top: 0, zIndex: 150, padding: "0 16px" }}>
-      <div style={{ height: 56, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ height: 56, display: "flex", flexWrap: "nowrap", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           <div style={{ width: 30, height: 30, background: "#0F8A4B", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -126,16 +141,22 @@ export function CommandBar({
           </button>
         </div>
 
-        {/* ── Desktop nav cluster ─────────────────────────────────────────── */}
-        <div className="hidden xl:flex" style={{ alignItems: "center", gap: 16, flexShrink: 0 }}>
+        {/* ── Desktop nav cluster ───────────────────────────────────────────
+            minWidth:0 lets this cluster shrink inside the flex row (flex
+            items default to min-width:auto, which would otherwise force the
+            whole header to overflow/wrap). The <nav> below scrolls
+            horizontally on its own when the domain labels - now full
+            source-system names like "Microsoft Dynamics (ERP)" - don't all
+            fit, so the header itself always stays a single line. */}
+        <div className="hidden lg:flex" style={{ alignItems: "center", gap: 16, flexShrink: 1, minWidth: 0 }}>
           <div style={{ width: 1, height: 22, background: "rgba(10,14,26,0.1)", flexShrink: 0 }} />
           <div ref={personaRef} style={{ position: "relative", flexShrink: 0 }}>
             <button
               onClick={() => setPersonaOpen((v) => !v)}
               style={{ display: "flex", alignItems: "center", gap: 6, background: personaOpen ? "#F4F6F9" : "transparent", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: 6 }}
             >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#0A0E1A", fontFamily: "Inter" }}>{activePersonaLabel}</span>
-              <span style={{ fontSize: 10, color: "#6B7A94", transform: personaOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#0A0E1A", fontFamily: "Inter", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activePersonaLabel}</span>
+              <span style={{ fontSize: 10, color: "#6B7A94", flexShrink: 0, transform: personaOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
             </button>
             {personaOpen && (
               <div data-testid="persona-dropdown" className="dropdown-pop" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 220, background: "white", border: "1px solid rgba(10,14,26,0.08)", borderRadius: 10, boxShadow: "0 8px 24px rgba(10,14,26,0.12)", padding: 6, zIndex: 60 }}>
@@ -158,7 +179,7 @@ export function CommandBar({
             )}
           </div>
           <div style={{ width: 1, height: 22, background: "rgba(10,14,26,0.1)", flexShrink: 0 }} />
-          <nav style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <nav className="nav-scroll" style={{ display: "flex", alignItems: "center", gap: 4, overflowX: "auto", minWidth: 0 }}>
             <button
               onClick={goHome}
               style={{
@@ -171,11 +192,13 @@ export function CommandBar({
                 fontWeight: activeHref === "/" ? 600 : 400,
                 cursor: "pointer",
                 fontFamily: "Inter",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
               Executive Overview
             </button>
-            {(["finance", "procurement", "partners"] as DomainKey[]).map((key) => {
+            {(["lending", "finance", "partners", "procurement"] as DomainKey[]).map((key) => {
               const domain = domains.find((d) => d.key === key);
               if (!domain) return null;
               return (
@@ -183,7 +206,7 @@ export function CommandBar({
                   key={key}
                   onClick={() => goToDomain(key)}
                   title={DOMAIN_TAGLINES[key]}
-                  style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "transparent", color: "#6B7A94", fontSize: 12, fontWeight: 400, cursor: "pointer", fontFamily: "Inter", transition: "all 0.15s" }}
+                  style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "transparent", color: "#6B7A94", fontSize: 12, fontWeight: 400, cursor: "pointer", fontFamily: "Inter", transition: "all 0.15s", flexShrink: 0, whiteSpace: "nowrap" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#F4F6F9")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -194,7 +217,7 @@ export function CommandBar({
           </nav>
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div style={{ flex: 1, minWidth: 12 }} />
 
         {/* ── Search (desktop) ────────────────────────────────────────────── */}
         <div ref={searchRef} className="hidden md:block" style={{ position: "relative", flexShrink: 0 }}>
@@ -204,6 +227,7 @@ export function CommandBar({
               <path d="M9 9L12 12" stroke="#6B7A94" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search risks, domains, KPIs…"
               value={searchValue}
@@ -211,6 +235,14 @@ export function CommandBar({
               onFocus={() => setSearchFocused(true)}
               style={{ background: "transparent", border: "none", outline: "none", fontSize: 12, color: "#0A0E1A", fontFamily: "Inter", width: "100%" }}
             />
+            {!searchFocused && !searchValue && (
+              <kbd
+                aria-hidden="true"
+                style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color: "#6B7A94", fontFamily: '"JetBrains Mono",monospace', background: "rgba(10,14,26,0.05)", border: "1px solid rgba(10,14,26,0.08)", borderRadius: 4, padding: "1px 5px", lineHeight: 1.5 }}
+              >
+                ⌘K
+              </kbd>
+            )}
           </div>
           {searchFocused && searchValue.trim() && (
             <div data-testid="search-results-dropdown" className="dropdown-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, width: 320, background: "white", border: "1px solid rgba(10,14,26,0.08)", borderRadius: 10, boxShadow: "0 8px 24px rgba(10,14,26,0.12)", padding: 6, zIndex: 60, maxHeight: 320, overflowY: "auto" }}>
@@ -233,7 +265,7 @@ export function CommandBar({
 
         {/* ── Right cluster ───────────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div className="hidden xl:flex" style={{ alignItems: "center", gap: 5, padding: "4px 10px", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.2)", borderRadius: 6 }}>
+          <div className="hidden lg:flex" style={{ alignItems: "center", gap: 5, padding: "4px 10px", background: "rgba(5,150,105,0.07)", border: "1px solid rgba(5,150,105,0.2)", borderRadius: 6 }}>
             <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: "#059669", color: "#059669" }} />
             <span style={{ fontSize: 11, color: "#047857", fontWeight: 500, fontFamily: '"JetBrains Mono",monospace' }}>Data as of {asOfLabel}</span>
           </div>
@@ -288,81 +320,9 @@ export function CommandBar({
             <span>✦</span>Ask Ada
           </button>
 
-          <div className="hidden xl:block" style={{ fontSize: 13, fontWeight: 600, color: "#0A0E1A", fontFamily: '"JetBrains Mono",monospace', letterSpacing: "0.05em" }}>{timeStr}</div>
-
-          <button
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Toggle menu"
-            className="xl:hidden"
-            style={{ background: "transparent", border: "1px solid rgba(10,14,26,0.08)", borderRadius: 8, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              {mobileOpen ? (
-                <path d="M3 3L13 13M13 3L3 13" stroke="#0A0E1A" strokeWidth="1.4" strokeLinecap="round" />
-              ) : (
-                <path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="#0A0E1A" strokeWidth="1.4" strokeLinecap="round" />
-              )}
-            </svg>
-          </button>
+          <div className="hidden lg:block" style={{ fontSize: 13, fontWeight: 600, color: "#0A0E1A", fontFamily: '"JetBrains Mono",monospace', letterSpacing: "0.05em" }}>{timeStr}</div>
         </div>
       </div>
-
-      {/* ── Mobile menu ───────────────────────────────────────────────────── */}
-      {mobileOpen && (
-        <div className="xl:hidden" style={{ borderTop: "1px solid rgba(10,14,26,0.07)", padding: "12px 4px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0 }}>
-              <circle cx="5.5" cy="5.5" r="4.5" stroke="#6B7A94" strokeWidth="1.2" />
-              <path d="M9 9L12 12" stroke="#6B7A94" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search risks, domains, KPIs…"
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              style={{ background: "transparent", border: "none", outline: "none", fontSize: 13, color: "#0A0E1A", fontFamily: "Inter", width: "100%" }}
-            />
-          </div>
-          {searchValue.trim() &&
-            searchResults.map((r, i) => (
-              <button
-                key={i}
-                onClick={() => runSearchResult(r)}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(10,14,26,0.06)", background: "white", cursor: "pointer" }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#0A0E1A", fontFamily: "Inter" }}>{r.label}</div>
-                <div style={{ fontSize: 11, color: "#6B7A94", fontFamily: "Inter" }}>{r.detail}</div>
-              </button>
-            ))}
-
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#6B7A94", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "Inter", marginTop: 6 }}>Views</div>
-          <button onClick={goHome} style={{ textAlign: "left", padding: "8px 12px", borderRadius: 8, border: "none", background: "#E7F6ED", color: "#0F8A4B", fontSize: 13, fontWeight: 600, fontFamily: "Inter", cursor: "pointer" }}>
-            Executive Overview
-          </button>
-          {(["finance", "procurement", "partners"] as DomainKey[]).map((key) => {
-            const domain = domains.find((d) => d.key === key);
-            if (!domain) return null;
-            return (
-              <button
-                key={key}
-                onClick={() => goToDomain(key)}
-                style={{ textAlign: "left", padding: "8px 12px", borderRadius: 8, border: "none", background: "#F4F6F9", color: "#0A0E1A", fontSize: 13, fontWeight: 500, fontFamily: "Inter", cursor: "pointer", display: "flex", flexDirection: "column", gap: 2 }}
-              >
-                <span>{domain.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 400, color: "#6B7A94" }}>{DOMAIN_TAGLINES[key]}</span>
-              </button>
-            );
-          })}
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="live-pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: "#059669", color: "#059669" }} />
-              <span style={{ fontSize: 11, color: "#047857", fontWeight: 500, fontFamily: '"JetBrains Mono",monospace' }}>Data as of {asOfLabel}</span>
-            </span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#0A0E1A", fontFamily: '"JetBrains Mono",monospace' }}>{timeStr}</span>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
