@@ -136,10 +136,15 @@ export function AiWidget({
 
   return (
     <>
-      {/* Sticky launcher */}
+      {/* Sticky launcher.
+          The pulsing halo that used to sit here scaled to 2.4x - a 134px
+          animating disc permanently covering whatever card was scrolled under
+          it, including that card's own drill-through arrow. It was decoration
+          rather than state (Ada is always available; the pulse wasn't telling
+          anyone anything), so it's gone. The launcher keeps a static ring so
+          it still reads as a distinct floating affordance. */}
       {!open && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, width: 56, height: 56 }}>
-          <span className="live-pulse-dot" style={{ position: "absolute", inset: 0, borderRadius: "50%", color: "#0F8A4B" }} />
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: "var(--z-fab)" as unknown as number, width: 56, height: 56 }}>
           <button
             onClick={() => setOpen(true)}
             aria-label="Open Ada, your dashboard analyst"
@@ -148,9 +153,13 @@ export function AiWidget({
               width: 56,
               height: 56,
               borderRadius: "50%",
-              background: "linear-gradient(135deg,#0F8A4B,#34D399)",
+              // Was #0D7A42 -> #34D399. The mint end left the white glyph at
+              // 1.92:1 against its own button, so the sparkle faded out over
+              // the bottom-right of the circle. This range keeps white at
+              // 4.4:1 or better across the whole face.
+              background: "linear-gradient(140deg,#0F8A4B,#0A6335)",
               border: "none",
-              boxShadow: "0 8px 24px rgba(15, 138, 75,0.35)",
+              boxShadow: "0 0 0 4px rgba(244,246,249,0.9), 0 8px 24px rgba(13, 122, 66,0.35)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -171,7 +180,7 @@ export function AiWidget({
             position: "fixed",
             bottom: 24,
             right: 24,
-            zIndex: 200,
+            zIndex: "var(--z-chat)" as unknown as number,
             width: "min(380px, calc(100vw - 32px))",
             height: "min(560px, calc(100vh - 48px))",
             background: "white",
@@ -184,12 +193,12 @@ export function AiWidget({
           }}
         >
           {/* Header */}
-          <div style={{ background: "#0F8A4B", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ background: "#0D7A42", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>✦</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "white", fontFamily: "Inter" }}>Ada</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontFamily: "Inter" }}>Your shortcut to a straight answer</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "white", fontFamily: "var(--font-sans)" }}>Ada</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontFamily: "var(--font-sans)" }}>Your shortcut to a straight answer</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} aria-label="Close Ada" style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 6, width: 26, height: 26, color: "white", cursor: "pointer", fontSize: 15 }}>
@@ -200,14 +209,14 @@ export function AiWidget({
           {/* Messages */}
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10, background: "#F8FAFC" }}>
             {messages.length === 0 && (
-              <div style={{ fontSize: 12.5, color: "#6B7A94", fontFamily: "Inter", lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12.5, color: "#5A6880", fontFamily: "var(--font-sans)", lineHeight: 1.6 }}>
                 Hi, I&rsquo;m Ada. Ask me anything about what&rsquo;s happening across the business — in plain language — and I&rsquo;ll always point you to the real number behind the answer.
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                   {["What needs my attention today?", "Which domain is most at risk?", "Summarise the lapsed approvals."].map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}
-                      style={{ textAlign: "left", fontSize: 12, padding: "7px 10px", borderRadius: 8, border: "1px solid rgba(10,14,26,0.08)", background: "white", cursor: "pointer", fontFamily: "Inter", color: "#0A0E1A" }}
+                      style={{ textAlign: "left", fontSize: 12, padding: "7px 10px", borderRadius: 8, border: "1px solid rgba(10,14,26,0.08)", background: "white", cursor: "pointer", fontFamily: "var(--font-sans)", color: "#0A0E1A" }}
                     >
                       {s}
                     </button>
@@ -219,14 +228,14 @@ export function AiWidget({
               <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%" }}>
                 <div
                   style={{
-                    background: m.role === "user" ? "#0F8A4B" : "white",
+                    background: m.role === "user" ? "#0D7A42" : "white",
                     color: m.role === "user" ? "white" : "#1A2035",
                     border: m.role === "user" ? "none" : "1px solid rgba(10,14,26,0.08)",
                     borderRadius: 12,
                     padding: "9px 13px",
                     fontSize: 13,
                     lineHeight: 1.55,
-                    fontFamily: "Inter",
+                    fontFamily: "var(--font-sans)",
                     display: "flex",
                     flexDirection: "column",
                   }}
@@ -236,10 +245,10 @@ export function AiWidget({
               </div>
             ))}
             {loading && (
-              <div style={{ alignSelf: "flex-start", fontSize: 12, color: "#6B7A94", fontFamily: "Inter", padding: "9px 13px" }}>Thinking…</div>
+              <div style={{ alignSelf: "flex-start", fontSize: 12, color: "#5A6880", fontFamily: "var(--font-sans)", padding: "9px 13px" }}>Thinking…</div>
             )}
             {error && (
-              <div style={{ alignSelf: "flex-start", maxWidth: "85%", background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 10, padding: "9px 13px", fontSize: 12.5, color: "#B91C1C", fontFamily: "Inter" }}>
+              <div style={{ alignSelf: "flex-start", maxWidth: "85%", background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 10, padding: "9px 13px", fontSize: 12.5, color: "#B91C1C", fontFamily: "var(--font-sans)" }}>
                 {error}
               </div>
             )}
@@ -256,12 +265,12 @@ export function AiWidget({
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Ada anything…"
               disabled={loading}
-              style={{ flex: 1, border: "1px solid rgba(10,14,26,0.12)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "Inter", outline: "none" }}
+              style={{ flex: 1, border: "1px solid rgba(10,14,26,0.12)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "var(--font-sans)", outline: "none" }}
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              style={{ background: "#0F8A4B", color: "white", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, fontFamily: "Inter", cursor: loading || !input.trim() ? "not-allowed" : "pointer", opacity: loading || !input.trim() ? 0.6 : 1 }}
+              style={{ background: "#0D7A42", color: "white", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 13, fontWeight: 600, fontFamily: "var(--font-sans)", cursor: loading || !input.trim() ? "not-allowed" : "pointer", opacity: loading || !input.trim() ? 0.6 : 1 }}
             >
               Send
             </button>

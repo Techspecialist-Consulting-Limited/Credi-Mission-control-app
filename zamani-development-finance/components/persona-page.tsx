@@ -120,7 +120,10 @@ export function PersonaPage({
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F4F6F9" }}>
+    // overflowX 'clip' (not 'hidden') for the same reason as the Executive
+    // Overview: contains any decorative bleed without creating a scroll
+    // container, which would break the command bar's position:sticky.
+    <div style={{ minHeight: "100vh", background: "#F4F6F9", overflowX: "clip" }}>
       <CommandBar
         domains={domains}
         risks={risks}
@@ -138,13 +141,13 @@ export function PersonaPage({
         <div style={{ marginBottom: 40 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: "#6B7A94", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "Inter", margin: "0 0 8px" }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "#5A6880", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "var(--font-sans)", margin: "0 0 8px" }}>
                 {dateStr} · {persona.role}
               </p>
               <h1 className="font-display" style={{ fontSize: "clamp(28px,5vw,48px)", fontWeight: 800, color: "#0A0E1A", letterSpacing: "-0.025em", lineHeight: 1.05, margin: 0 }}>
                 Good {timeOfDay}, {persona.name}.
               </h1>
-              <p style={{ fontSize: 16, color: "#6B7A94", marginTop: 10, fontFamily: "Inter", fontWeight: 400, letterSpacing: "-0.01em", maxWidth: 640 }}>{heroSubLine}</p>
+              <p style={{ fontSize: 16, color: "#5A6880", marginTop: 10, fontFamily: "var(--font-sans)", fontWeight: 400, letterSpacing: "-0.01em", maxWidth: 640 }}>{heroSubLine}</p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button className="ms-blue-btn" onClick={() => setAiOpen(true)} style={{ padding: "8px 16px" }}>✦ &nbsp;Ask Ada</button>
@@ -156,10 +159,10 @@ export function PersonaPage({
         <div className="ai-glow" style={{ borderRadius: 16, padding: 24, marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
             <AiBadge label="Ada's Briefing" />
-            <span style={{ fontSize: 11, color: "#6B7A94", fontFamily: "Inter" }}>As of {asOfLabel}</span>
+            <span style={{ fontSize: 11, color: "#5A6880", fontFamily: "var(--font-sans)" }}>As of {asOfLabel}</span>
           </div>
-          <p style={{ fontSize: 15, lineHeight: 1.6, fontWeight: 600, color: "#0A0E1A", margin: "0 0 6px", fontFamily: "Inter" }}>{persona.headline}</p>
-          <p style={{ fontSize: 13.5, lineHeight: 1.7, color: "#6B7A94", margin: 0, fontFamily: "Inter" }}>{persona.summary}</p>
+          <p style={{ fontSize: 15, lineHeight: 1.6, fontWeight: 600, color: "#0A0E1A", margin: "0 0 6px", fontFamily: "var(--font-sans)" }}>{persona.headline}</p>
+          <p style={{ fontSize: 13.5, lineHeight: 1.7, color: "#5A6880", margin: 0, fontFamily: "var(--font-sans)" }}>{persona.summary}</p>
         </div>
 
         {/* ── KPI grid, matches KpiRow's icon+hover-lift+count-up style ───── */}
@@ -170,12 +173,12 @@ export function PersonaPage({
             const statusColor = STATUS_COLORS[k.statusTone];
             const trendMagnitude = k.trendLabel === "—" ? null : parseFloat(k.trendLabel);
             const trendArrow = trendMagnitude === null ? null : trendMagnitude > 0 ? "↑" : trendMagnitude < 0 ? "↓" : "→";
-            const trendColor = trendMagnitude === 0 ? "#6B7A94" : k.trendGood ? "#059669" : "#DC2626";
+            const trendColor = trendMagnitude === 0 ? "#5A6880" : k.trendGood ? "#059669" : "#DC2626";
             const content = (
               <>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <p style={{ fontSize: 12.5, fontWeight: 600, color: "#6B7A94", fontFamily: "Inter", lineHeight: 1.3 }}>{k.label}</p>
-                  <span style={{ display: "flex", width: 32, height: 32, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 8, background: "#E7F6ED", color: "#0F8A4B" }}>
+                  <p style={{ fontSize: 12.5, fontWeight: 600, color: "#5A6880", fontFamily: "var(--font-sans)", lineHeight: 1.3 }}>{k.label}</p>
+                  <span style={{ display: "flex", width: 32, height: 32, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 8, background: "#E7F6ED", color: "#0D7A42" }}>
                     <Icon size={16} strokeWidth={2} />
                   </span>
                 </div>
@@ -184,18 +187,18 @@ export function PersonaPage({
                     <AnimatedNumber value={k.value} />
                   </p>
                   {trendArrow && (
-                    <span style={{ fontSize: 11.5, fontWeight: 600, color: trendColor, fontFamily: "Inter" }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: trendColor, fontFamily: "var(--font-sans)" }}>
                       {trendArrow} {k.trendLabel}
                     </span>
                   )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
                   <span className={k.statusTone === "critical" ? "live-pulse-dot" : undefined} style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, color: statusColor, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: statusColor, fontFamily: "Inter" }}>{k.statusLabel}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: statusColor, fontFamily: "var(--font-sans)" }}>{k.statusLabel}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, marginTop: 8 }}>
-                  <p style={{ fontSize: 12, color: "#6B7A94", fontFamily: "Inter", lineHeight: 1.5, margin: 0 }}>{k.note}</p>
-                  {k.href && <span style={{ fontSize: 11, color: "#0F8A4B", fontFamily: "Inter", fontWeight: 500, flexShrink: 0 }}>Drill in →</span>}
+                  <p style={{ fontSize: 12, color: "#5A6880", fontFamily: "var(--font-sans)", lineHeight: 1.5, margin: 0 }}>{k.note}</p>
+                  {k.href && <span style={{ fontSize: 11, color: "#0D7A42", fontFamily: "var(--font-sans)", fontWeight: 500, flexShrink: 0 }}>Drill in →</span>}
                 </div>
               </>
             );
@@ -218,7 +221,7 @@ export function PersonaPage({
               <div key={chart.title} className="enterprise-card" style={{ padding: 20 }}>
                 <div style={{ marginBottom: 12 }}>
                   <h3 className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#0A0E1A", margin: 0 }}>{chart.title}</h3>
-                  <p style={{ fontSize: 12, color: "#6B7A94", marginTop: 2, fontFamily: "Inter" }}>{chart.subtitle}</p>
+                  <p style={{ fontSize: 12, color: "#5A6880", marginTop: 2, fontFamily: "var(--font-sans)" }}>{chart.subtitle}</p>
                 </div>
                 {chart.kind === "donut" ? (
                   <DonutChart labels={chart.labels} values={chart.values} colors={chart.colors} valueFormatter={FORMATTERS[chart.format ?? "count"]} height={260} />
@@ -234,7 +237,7 @@ export function PersonaPage({
         {persona.queue.length > 0 && (
           <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ padding: "18px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#6B7A94", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "Inter", marginBottom: 3 }}>Live Business Issues</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#5A6880", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "var(--font-sans)", marginBottom: 3 }}>Live Business Issues</div>
               <h3 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: "#0A0E1A", margin: 0, letterSpacing: "-0.01em" }}>
                 Awaiting your decision ({persona.queue.length})
               </h3>
@@ -251,14 +254,14 @@ export function PersonaPage({
                     flexWrap: "wrap",
                   }}
                 >
-                  <div style={{ width: 3, height: 32, borderRadius: 2, background: "#0F8A4B", flexShrink: 0 }} />
+                  <div style={{ width: 3, height: 32, borderRadius: 2, background: "#0D7A42", flexShrink: 0 }} />
                   <div style={{ minWidth: 220, flex: 1 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0A0E1A", fontFamily: "Inter" }}>{item.title}</div>
-                    <div style={{ fontSize: 12, color: "#6B7A94", fontFamily: "Inter", marginTop: 2 }}>{item.detail}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0A0E1A", fontFamily: "var(--font-sans)" }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: "#5A6880", fontFamily: "var(--font-sans)", marginTop: 2 }}>{item.detail}</div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "auto" }}>
                     <div className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#0A0E1A" }}>{item.value}</div>
-                    <div style={{ fontSize: 11.5, color: "#6B7A94", fontFamily: "Inter" }}>{item.waiting}</div>
+                    <div style={{ fontSize: 11.5, color: "#5A6880", fontFamily: "var(--font-sans)" }}>{item.waiting}</div>
                   </div>
                 </div>
               );
@@ -275,7 +278,7 @@ export function PersonaPage({
 
         {persona.queue.length === 0 && persona.charts.length === 0 && (
           <div className="enterprise-card" style={{ padding: 24, textAlign: "center" }}>
-            <p style={{ fontSize: 13, color: "#6B7A94", fontFamily: "Inter" }}>Nothing awaiting your decision.</p>
+            <p style={{ fontSize: 13, color: "#5A6880", fontFamily: "var(--font-sans)" }}>Nothing awaiting your decision.</p>
           </div>
         )}
       </main>

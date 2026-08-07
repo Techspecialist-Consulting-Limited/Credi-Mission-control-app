@@ -18,7 +18,7 @@ export default async function DataSourcesDrill() {
           <div key={sys.system} className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#0A0E1A", margin: 0 }}>{sys.system}</h3>
-              <span style={{ fontSize: 12, color: "#6B7A94", fontFamily: "Inter" }}>{sys.totalRows.toLocaleString()} rows total</span>
+              <span style={{ fontSize: 12, color: "#5A6880", fontFamily: "var(--font-sans)" }}>{sys.totalRows.toLocaleString()} rows total</span>
             </div>
             {sys.tables.map((t) => (
               <div key={t.table} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 24px", borderBottom: "1px solid rgba(10,14,26,0.045)" }}>

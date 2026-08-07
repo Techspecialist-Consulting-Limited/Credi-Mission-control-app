@@ -3,7 +3,7 @@
 import type { ApexOptions } from "apexcharts";
 import { ReactApexChart } from "./react-apex-chart";
 
-const DEFAULT_COLORS = ["#0F8A4B", "#34D399", "#D97706", "#DC2626", "#7C3AED", "#6B7A94"];
+const DEFAULT_COLORS = ["#0D7A42", "#34D399", "#D97706", "#DC2626", "#7C3AED", "#5A6880"];
 
 export function DonutChart({
   labels,
@@ -19,7 +19,7 @@ export function DonutChart({
   valueFormatter?: (value: number) => string;
 }) {
   const options: ApexOptions = {
-    chart: { type: "donut", fontFamily: "Inter, sans-serif", toolbar: { show: false } },
+    chart: { type: "donut", fontFamily: "var(--font-sans)", toolbar: { show: false } },
     labels,
     colors,
     legend: {
@@ -48,7 +48,7 @@ export function DonutChart({
               label: "Total",
               fontSize: "12px",
               fontWeight: 600,
-              color: "#6B7A94",
+              color: "#5A6880",
               formatter: (w) => {
                 const sum = w.globals.seriesTotals.reduce((a: number, b: number) => a + b, 0);
                 return valueFormatter ? valueFormatter(sum) : sum.toLocaleString();

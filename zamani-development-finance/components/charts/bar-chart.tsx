@@ -6,7 +6,7 @@ import { ReactApexChart } from "./react-apex-chart";
 export function BarChart({
   categories,
   values,
-  color = "#0F8A4B",
+  color = "#0D7A42",
   height = 240,
   horizontal = false,
   valueFormatter,
@@ -22,7 +22,7 @@ export function BarChart({
   const tickAmount = Math.max(1, Math.min(maxValue, 8));
 
   const options: ApexOptions = {
-    chart: { type: "bar", fontFamily: "Inter, sans-serif", toolbar: { show: false } },
+    chart: { type: "bar", fontFamily: "var(--font-sans)", toolbar: { show: false } },
     plotOptions: {
       bar: {
         horizontal,
@@ -52,7 +52,7 @@ export function BarChart({
       categories,
       tickAmount: horizontal ? tickAmount : undefined,
       labels: {
-        style: { colors: "#6B7A94", fontSize: "11.5px", fontWeight: 600 },
+        style: { colors: "#5A6880", fontSize: "11.5px", fontWeight: 600 },
         formatter: horizontal ? (val) => (valueFormatter ? valueFormatter(Number(val)) : Math.round(Number(val)).toLocaleString()) : undefined,
       },
       axisBorder: { show: false },
@@ -61,7 +61,7 @@ export function BarChart({
     yaxis: {
       tickAmount: horizontal ? undefined : tickAmount,
       labels: {
-        style: { colors: "#6B7A94", fontSize: "11.5px", fontWeight: 600 },
+        style: { colors: "#5A6880", fontSize: "11.5px", fontWeight: 600 },
         formatter: horizontal ? undefined : (val) => (valueFormatter ? valueFormatter(val) : Math.round(val).toLocaleString()),
       },
     },

@@ -95,8 +95,19 @@ export interface DashboardProps {
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
+/** One status palette for the whole surface.
+ *
+ * This used to be declared four separate times in this file with two different
+ * triples - a bright set and a dark set - so the same "Watch" state rendered in
+ * two different ambers depending on which card you were looking at. The dark
+ * triple is also the only one that actually clears WCAG AA as text: measured
+ * against white the bright set scores 3.77:1 (healthy) and 3.19:1 (attention),
+ * both under the 4.5:1 floor, while these score 5.48 / 5.02 / 6.47. So the
+ * inconsistency and the contrast failure had the same fix. */
+export const STATUS_COLORS = { healthy: '#047857', attention: '#B45309', critical: '#B91C1C' } as const
+
 function StatusDot({ status }: { status: 'healthy' | 'attention' | 'critical' }) {
-  const colors = { healthy: '#059669', attention: '#D97706', critical: '#DC2626' }
+  const colors = STATUS_COLORS
   if (status === 'critical') return <LiveDot color={colors.critical} size={8} />
   return <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors[status], display: 'inline-block', flexShrink: 0 }} />
 }
@@ -105,7 +116,7 @@ function StatusDot({ status }: { status: 'healthy' | 'attention' | 'critical' })
  * while a solid center dot stays put, the standard "live"/"recording"
  * pattern. Used for critical alerts (to read as genuinely alarming) and for
  * "this data is being watched" signals elsewhere in the UI. */
-function LiveDot({ color = '#0F8A4B', size = 8 }: { color?: string; size?: number }) {
+function LiveDot({ color = '#0D7A42', size = 8 }: { color?: string; size?: number }) {
   return (
     <span style={{ position: 'relative', display: 'inline-flex', width: size, height: size, flexShrink: 0 }}>
       <motion.span
@@ -120,7 +131,7 @@ function LiveDot({ color = '#0F8A4B', size = 8 }: { color?: string; size?: numbe
 
 export function AiBadge({ label = 'Ada' }: { label?: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'linear-gradient(135deg,#E7F6ED,#E8F0FF)', border: '1px solid rgba(15, 138, 75,0.2)', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600, color: '#0F8A4B', fontFamily: 'Inter', letterSpacing: '0.04em' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'linear-gradient(135deg,#E7F6ED,#E8F0FF)', border: '1px solid rgba(13, 122, 66,0.2)', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600, color: '#0D7A42', fontFamily: "var(--font-sans)", letterSpacing: '0.04em' }}>
       ✦ {label}
     </span>
   )
@@ -176,8 +187,8 @@ function SegmentRing({
           })}
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: `0 ${strokeWidth + 4}px` }}>
-        <AnimatedNumber value={centerValue} style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: size * 0.24, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em', lineHeight: 1 }} />
-        <span style={{ fontSize: Math.max(8.5, size * 0.08), color: '#6B7A94', fontFamily: 'Inter', lineHeight: 1.15, marginTop: 3, whiteSpace: 'nowrap' }}>{centerLabel}</span>
+        <AnimatedNumber value={centerValue} style={{ fontFamily: "var(--font-mono)", fontSize: size * 0.24, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em', lineHeight: 1 }} />
+        <span style={{ fontSize: Math.max(8.5, size * 0.08), color: '#5A6880', fontFamily: "var(--font-sans)", lineHeight: 1.15, marginTop: 3, whiteSpace: 'nowrap' }}>{centerLabel}</span>
       </div>
     </div>
   )
@@ -232,7 +243,7 @@ const RISK_SOURCE_ICON: Record<string, LucideIcon> = {
 // picking one answers "what kind of problem is this" rather than "how bad is
 // it" (severity is still visible via each card's colour bar and status pill).
 const CATEGORY_LABELS: Record<RiskCategory, string> = { money: 'Money held', credit: 'Credit', compliance: 'Compliance', reporting: 'Reporting' }
-const CATEGORY_COLORS: Record<RiskCategory, string> = { money: '#0F8A4B', credit: '#B91C1C', compliance: '#B45309', reporting: '#2563EB' }
+const CATEGORY_COLORS: Record<RiskCategory, string> = { money: '#0D7A42', credit: '#B91C1C', compliance: '#B45309', reporting: '#2563EB' }
 // Mount-triggered (not scroll-triggered) stagger, deliberately not the
 // shared AnimatedGrid/AnimatedGridItem: those use `whileInView`+`once`, which
 // is right for static content but wrong here - this grid's contents change
@@ -273,8 +284,8 @@ function RiskDetailPanel({
   const statusLabels: Record<RiskStatus, string> = { open: 'Open', investigating: 'Investigating', escalated: 'Escalated', resolved: 'Resolved' }
   const urgencyColors: Record<string, { bg: string; text: string }> = {
     immediate: { bg: 'rgba(220,38,38,0.07)', text: '#B91C1C' },
-    soon: { bg: 'rgba(15, 138, 75,0.07)', text: '#0F8A4B' },
-    watch: { bg: 'rgba(107,122,148,0.07)', text: '#6B7A94' },
+    soon: { bg: 'rgba(13, 122, 66,0.07)', text: '#0D7A42' },
+    watch: { bg: 'rgba(107,122,148,0.07)', text: '#5A6880' },
   }
   const pc = priorityColors[risk.priority]
   const evidenceRef = useRef<HTMLDivElement>(null)
@@ -322,17 +333,17 @@ function RiskDetailPanel({
         <div style={{ padding: '28px 32px 22px', background: 'white', borderBottom: '1px solid rgba(10,14,26,0.07)', position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.08em', fontFamily: 'Inter', textTransform: 'uppercase' }}>Risk Investigation</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#5A6880', letterSpacing: '0.08em', fontFamily: "var(--font-sans)", textTransform: 'uppercase' }}>Risk Investigation</span>
             </div>
-            <button onClick={onClose} style={{ background: '#F4F6F9', border: 'none', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6B7A94' }}>×</button>
+            <button onClick={onClose} style={{ background: '#F4F6F9', border: 'none', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#5A6880' }}>×</button>
           </div>
           <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, color: '#0A0E1A', margin: '0 0 14px', letterSpacing: '-0.02em', lineHeight: 1.25 }}>{risk.title}</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: 'Inter', background: pc.bg, color: pc.text, border: `1px solid ${pc.border}` }}>
+            <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: "var(--font-sans)", background: pc.bg, color: pc.text, border: `1px solid ${pc.border}` }}>
               {risk.priority === 'high' ? 'High Priority' : risk.priority === 'medium' ? 'Medium' : 'Low'}
             </span>
-            <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter', background: '#F4F6F9', padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(10,14,26,0.07)' }}>{risk.subtitle}</span>
-            <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>{risk.time}</span>
+            <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)", background: '#F4F6F9', padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(10,14,26,0.07)' }}>{risk.subtitle}</span>
+            <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{risk.time}</span>
           </div>
 
           {/* Status stepper */}
@@ -347,12 +358,12 @@ function RiskDetailPanel({
                     style={{
                       padding: '5px 14px',
                       borderRadius: 20,
-                      border: isActive ? '1.5px solid #0F8A4B' : '1px solid rgba(10,14,26,0.1)',
+                      border: isActive ? '1.5px solid #0D7A42' : '1px solid rgba(10,14,26,0.1)',
                       background: isActive ? '#E7F6ED' : isPast ? '#F0F9F4' : 'white',
-                      color: isActive ? '#0F8A4B' : isPast ? '#059669' : '#6B7A94',
+                      color: isActive ? '#0D7A42' : isPast ? '#059669' : '#5A6880',
                       fontSize: 11,
                       fontWeight: isActive ? 700 : 500,
-                      fontFamily: 'Inter',
+                      fontFamily: "var(--font-sans)",
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                       whiteSpace: 'nowrap',
@@ -375,21 +386,21 @@ function RiskDetailPanel({
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', flex: 1, minWidth: 140 }}>
-                <div style={{ fontSize: 10, color: '#6B7A94', fontFamily: 'Inter', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Impact Level</div>
+                <div style={{ fontSize: 10, color: '#5A6880', fontFamily: "var(--font-sans)", marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Impact Level</div>
                 <div className="font-display" style={{ fontSize: 17, fontWeight: 700, color: '#0A0E1A' }}>{risk.impactLevel}</div>
               </div>
               <div style={{ background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', flex: 2 }}>
-                <div style={{ fontSize: 10, color: '#6B7A94', fontFamily: 'Inter', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Areas Affected</div>
+                <div style={{ fontSize: 10, color: '#5A6880', fontFamily: "var(--font-sans)", marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Areas Affected</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {risk.impactAreas.map((a) => (
-                    <span key={a} style={{ fontSize: 11, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.08)', borderRadius: 5, padding: '2px 8px', color: '#2D3748', fontFamily: 'Inter' }}>{a}</span>
+                    <span key={a} style={{ fontSize: 11, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.08)', borderRadius: 5, padding: '2px 8px', color: '#2D3748', fontFamily: "var(--font-sans)" }}>{a}</span>
                   ))}
                 </div>
               </div>
               {risk.assignedTo && (
                 <div style={{ background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', flex: 1.5 }}>
-                  <div style={{ fontSize: 10, color: '#6B7A94', fontFamily: 'Inter', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Assigned To</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0A0E1A', fontFamily: 'Inter' }}>{risk.assignedTo}</div>
+                  <div style={{ fontSize: 10, color: '#5A6880', fontFamily: "var(--font-sans)", marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Assigned To</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0A0E1A', fontFamily: "var(--font-sans)" }}>{risk.assignedTo}</div>
                 </div>
               )}
             </div>
@@ -400,9 +411,9 @@ function RiskDetailPanel({
             <div className="ai-glow" style={{ borderRadius: 12, padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <AiBadge label="Ada's Analysis" />
-                <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>Based on historical patterns and live data</span>
+                <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>Based on historical patterns and live data</span>
               </div>
-              <p style={{ fontSize: 14, lineHeight: 1.7, color: '#1A2035', margin: '0 0 14px', fontFamily: 'Inter' }}>{risk.aiAnalysis}</p>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: '#1A2035', margin: '0 0 14px', fontFamily: "var(--font-sans)" }}>{risk.aiAnalysis}</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="ghost-btn" onClick={() => evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ padding: '5px 12px', fontSize: 12 }}>Show evidence</button>
                 {[
@@ -418,20 +429,20 @@ function RiskDetailPanel({
 
           {/* Evidence Timeline */}
           <div ref={evidenceRef} style={{ marginBottom: 24, scrollMarginTop: 20 }}>
-            <h3 className="font-display" style={{ fontSize: 13, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 14 }}>Evidence Trail</h3>
+            <h3 className="font-display" style={{ fontSize: 13, fontWeight: 700, color: '#5A6880', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 14 }}>Evidence Trail</h3>
             <div style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', left: 16, top: 0, bottom: 0, width: 1, background: 'rgba(10,14,26,0.07)' }} />
               {risk.evidence.map((ev, i) => (
                 <div key={i} style={{ display: 'flex', gap: 16, paddingBottom: 14, alignItems: 'flex-start' }}>
                   <div style={{ width: 32, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 3 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.source === 'Copilot' ? '#D97706' : '#0F8A4B', border: '2px solid white', boxShadow: '0 0 0 1px rgba(10,14,26,0.1)', zIndex: 1, position: 'relative' }} />
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.source === 'Copilot' ? '#D97706' : '#0D7A42', border: '2px solid white', boxShadow: '0 0 0 1px rgba(10,14,26,0.1)', zIndex: 1, position: 'relative' }} />
                   </div>
                   <div style={{ flex: 1, background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '10px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: '#6B7A94', fontFamily: '"JetBrains Mono",monospace', letterSpacing: '0.04em' }}>{ev.time}</span>
-                      <span style={{ fontSize: 10, color: ev.source === 'Copilot' ? '#D97706' : '#0F8A4B', fontWeight: 600, fontFamily: 'Inter', background: ev.source === 'Copilot' ? 'rgba(217,119,6,0.08)' : 'rgba(15, 138, 75,0.06)', padding: '1px 7px', borderRadius: 4 }}>{ev.source}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: '#5A6880', fontFamily: "var(--font-mono)", letterSpacing: '0.04em' }}>{ev.time}</span>
+                      <span style={{ fontSize: 10, color: ev.source === 'Copilot' ? '#D97706' : '#0D7A42', fontWeight: 600, fontFamily: "var(--font-sans)", background: ev.source === 'Copilot' ? 'rgba(217,119,6,0.08)' : 'rgba(13, 122, 66,0.06)', padding: '1px 7px', borderRadius: 4 }}>{ev.source}</span>
                     </div>
-                    <p style={{ margin: 0, fontSize: 13, color: '#1A2035', lineHeight: 1.5, fontFamily: 'Inter' }}>{ev.note}</p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#1A2035', lineHeight: 1.5, fontFamily: "var(--font-sans)" }}>{ev.note}</p>
                   </div>
                 </div>
               ))}
@@ -441,9 +452,9 @@ function RiskDetailPanel({
           {/* Recommended Actions */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h3 className="font-display" style={{ fontSize: 13, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>Recommended Actions</h3>
+              <h3 className="font-display" style={{ fontSize: 13, fontWeight: 700, color: '#5A6880', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>Recommended Actions</h3>
               {risk.recommendedActions.length > 0 && (
-                <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>{doneCount} of {risk.recommendedActions.length} done</span>
+                <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{doneCount} of {risk.recommendedActions.length} done</span>
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -454,12 +465,12 @@ function RiskDetailPanel({
                   <button
                     key={action.label}
                     onClick={() => toggleActionDone(action.label)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: done ? '#F0F9F4' : 'white', border: done ? '1px solid rgba(5,150,105,0.25)' : '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left', fontFamily: 'Inter' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: done ? '#F0F9F4' : 'white', border: done ? '1px solid rgba(5,150,105,0.25)' : '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s', width: '100%', textAlign: 'left', fontFamily: "var(--font-sans)" }}
                   >
-                    <span style={{ fontSize: 13, color: done ? '#059669' : '#0A0E1A', fontFamily: 'Inter', textDecoration: done ? 'line-through' : 'none' }}>{action.label}</span>
+                    <span style={{ fontSize: 13, color: done ? '#059669' : '#0A0E1A', fontFamily: "var(--font-sans)", textDecoration: done ? 'line-through' : 'none' }}>{action.label}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 11, color: done ? '#059669' : uc.text, background: done ? 'rgba(5,150,105,0.1)' : uc.bg, padding: '2px 8px', borderRadius: 5, fontWeight: 600, fontFamily: 'Inter' }}>{done ? 'Done' : action.urgency.charAt(0).toUpperCase() + action.urgency.slice(1)}</span>
-                      <span style={{ color: '#0F8A4B', fontSize: 14 }}>{done ? '✓' : '→'}</span>
+                      <span style={{ fontSize: 11, color: done ? '#059669' : uc.text, background: done ? 'rgba(5,150,105,0.1)' : uc.bg, padding: '2px 8px', borderRadius: 5, fontWeight: 600, fontFamily: "var(--font-sans)" }}>{done ? 'Done' : action.urgency.charAt(0).toUpperCase() + action.urgency.slice(1)}</span>
+                      <span style={{ color: '#0D7A42', fontSize: 14 }}>{done ? '✓' : '→'}</span>
                     </div>
                   </button>
                 )
@@ -482,7 +493,7 @@ function RiskDetailPanel({
                       <button
                         key={team}
                         onClick={() => { onAssign(risk.id, team); setAssignOpen(false) }}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: active ? '#E7F6ED' : 'transparent', color: active ? '#0F8A4B' : '#0A0E1A', fontSize: 12, fontWeight: active ? 700 : 500, fontFamily: 'Inter', cursor: 'pointer' }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: active ? '#E7F6ED' : 'transparent', color: active ? '#0D7A42' : '#0A0E1A', fontSize: 12, fontWeight: active ? 700 : 500, fontFamily: "var(--font-sans)", cursor: 'pointer' }}
                         onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = '#F4F6F9' }}
                         onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent' }}
                       >
@@ -494,7 +505,7 @@ function RiskDetailPanel({
               )}
             </div>
             <button className="ghost-btn" onClick={downloadRiskReport} style={{ padding: '9px 18px' }}>Generate Report</button>
-            <button onClick={() => onStatusChange(risk.id, 'resolved')} style={{ padding: '9px 18px', background: 'transparent', border: '1px solid rgba(5,150,105,0.25)', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#047857', fontFamily: 'Inter', cursor: 'pointer' }}>Mark Resolved</button>
+            <button onClick={() => onStatusChange(risk.id, 'resolved')} style={{ padding: '9px 18px', background: 'transparent', border: '1px solid rgba(5,150,105,0.25)', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#047857', fontFamily: "var(--font-sans)", cursor: 'pointer' }}>Mark Resolved</button>
           </div>
         </div>
       </div>
@@ -505,7 +516,7 @@ function RiskDetailPanel({
 // ─── Domain Workspace Panel ───────────────────────────────────────────────────
 
 function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose: () => void; onAskAI: (question: string) => void }) {
-  const statusColors = { healthy: '#059669', attention: '#D97706', critical: '#DC2626' }
+  const statusColors = STATUS_COLORS
   const statusLabels = { healthy: 'Healthy', attention: 'Needs Attention', critical: 'Critical' }
 
   // Real .ics download - same "real artifact" pattern as the report/register
@@ -567,19 +578,19 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                {(() => { const Icon = DOMAIN_ICON_COMPONENT[domain.key]; return <Icon size={20} color="#0F8A4B" strokeWidth={2} /> })()}
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.08em', fontFamily: 'Inter', textTransform: 'uppercase' }}>Decision Workspace</span>
+                {(() => { const Icon = DOMAIN_ICON_COMPONENT[domain.key]; return <Icon size={20} color="#0D7A42" strokeWidth={2} /> })()}
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#5A6880', letterSpacing: '0.08em', fontFamily: "var(--font-sans)", textTransform: 'uppercase' }}>Decision Workspace</span>
               </div>
               <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, color: '#0A0E1A', margin: 0 }}>{domain.label}</h2>
-              <p style={{ fontSize: 13.5, color: '#6B7A94', fontFamily: 'Inter', margin: '4px 0 0' }}>{DOMAIN_TAGLINES[domain.key]}</p>
+              <p style={{ fontSize: 13.5, color: '#5A6880', fontFamily: "var(--font-sans)", margin: '4px 0 0' }}>{DOMAIN_TAGLINES[domain.key]}</p>
             </div>
-            <button onClick={onClose} style={{ background: '#F4F6F9', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6B7A94' }}>×</button>
+            <button onClick={onClose} style={{ background: '#F4F6F9', border: 'none', borderRadius: 8, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#5A6880' }}>×</button>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: `${statusColors[domain.tileStatusTone]}14`, border: `1px solid ${statusColors[domain.tileStatusTone]}30`, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: statusColors[domain.tileStatusTone] }}>
               <StatusDot status={domain.tileStatusTone} />{statusLabels[domain.tileStatusTone]}
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#6B7A94' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F4F6F9', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 6, padding: '4px 10px', fontSize: 12, color: '#5A6880' }}>
               {domain.tileHeadline}
             </span>
           </div>
@@ -588,7 +599,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
           <div style={{ marginBottom: 28 }}>
             <div className="ai-glow" style={{ borderRadius: 12, padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><AiBadge label="Ada's Take" /></div>
-              <p style={{ fontSize: 14, lineHeight: 1.65, color: '#1A2035', margin: 0, fontFamily: 'Inter' }}>{domain.aiSummary}</p>
+              <p style={{ fontSize: 14, lineHeight: 1.65, color: '#1A2035', margin: 0, fontFamily: "var(--font-sans)" }}>{domain.aiSummary}</p>
               <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="ghost-btn" onClick={downloadDomainReport} style={{ padding: '5px 12px', fontSize: 12 }}>Generate report</button>
                 {[
@@ -601,17 +612,17 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
             </div>
           </div>
           <div style={{ marginBottom: 28 }}>
-            <h3 className="font-display" style={{ fontSize: 14, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>Key Performance Indicators</h3>
+            <h3 className="font-display" style={{ fontSize: 14, fontWeight: 600, color: '#5A6880', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>Key Performance Indicators</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 12 }}>
               {domain.kpis.map((kpi) => {
                 const cardStyle: React.CSSProperties = { background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 12, padding: '16px 18px', display: 'block', textDecoration: 'none' }
                 const content = (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                      <div style={{ fontSize: 11, color: '#6B7A94', marginBottom: 6, fontFamily: 'Inter' }}>{kpi.label}</div>
-                      {kpi.href && <span style={{ fontSize: 11, color: '#0F8A4B', fontFamily: 'Inter', flexShrink: 0 }}>Drill in →</span>}
+                      <div style={{ fontSize: 11, color: '#5A6880', marginBottom: 6, fontFamily: "var(--font-sans)" }}>{kpi.label}</div>
+                      {kpi.href && <span style={{ fontSize: 11, color: '#0D7A42', fontFamily: "var(--font-sans)", flexShrink: 0 }}>Drill in →</span>}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: '#0A0E1A', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>{kpi.value}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#0A0E1A', fontFamily: "var(--font-sans)" }}>{kpi.value}</div>
                     {kpi.delta && <div style={{ fontSize: 11, marginTop: 4, color: kpi.deltaGood ? '#059669' : '#DC2626', fontWeight: 500 }}>{kpi.deltaDir === 'up' ? '↑' : '↓'} {kpi.delta} vs last period</div>}
                   </>
                 )
@@ -628,7 +639,7 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
             </div>
           </div>
           <div style={{ marginBottom: 28 }}>
-            <h3 className="font-display" style={{ fontSize: 14, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>Recommended Actions</h3>
+            <h3 className="font-display" style={{ fontSize: 14, fontWeight: 600, color: '#5A6880', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>Recommended Actions</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[{ label: 'Review detailed performance breakdown', urgency: 'Now' }, { label: 'Request AI-generated executive summary', urgency: 'Suggested' }, { label: 'Schedule stakeholder review', urgency: 'This week' }].map((action) => (
                 <button
@@ -638,12 +649,12 @@ function WorkspacePanel({ domain, onClose, onAskAI }: { domain: Domain; onClose:
                     else if (action.label.startsWith('Request')) onAskAI(`Generate an executive summary for the ${domain.label} domain — current performance, key risks, and recommended next steps, grounded in the real KPI data.`)
                     else scheduleStakeholderReview()
                   }}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: 'Inter' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid rgba(10,14,26,0.07)', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', width: '100%', textAlign: 'left', fontFamily: "var(--font-sans)" }}
                 >
-                  <span style={{ fontSize: 13, color: '#0A0E1A', fontFamily: 'Inter' }}>{action.label}</span>
+                  <span style={{ fontSize: 13, color: '#0A0E1A', fontFamily: "var(--font-sans)" }}>{action.label}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, color: '#6B7A94', background: '#F4F6F9', padding: '2px 8px', borderRadius: 4 }}>{action.urgency}</span>
-                    <span style={{ color: '#0F8A4B', fontSize: 14 }}>→</span>
+                    <span style={{ fontSize: 11, color: '#5A6880', background: '#F4F6F9', padding: '2px 8px', borderRadius: 4 }}>{action.urgency}</span>
+                    <span style={{ color: '#0D7A42', fontSize: 14 }}>→</span>
                   </div>
                 </button>
               ))}
@@ -672,7 +683,7 @@ function EnterpriseHealthCard({
   // green used by the risk-priority ring on the card beside this one - same
   // severity language (red=critical, amber=watch, green=on track), just a
   // visually distinct palette so the two rings don't read as one repeated.
-  const statusColors = { healthy: '#047857', attention: '#B45309', critical: '#B91C1C' }
+  const statusColors = STATUS_COLORS
   const statusChipLabels = { healthy: 'On track', attention: 'Watch', critical: 'Needs attention' }
   const onTrackCount = domains.filter((d) => d.tileStatusTone === 'healthy').length
   const watchCount = domains.filter((d) => d.tileStatusTone === 'attention').length
@@ -687,21 +698,21 @@ function EnterpriseHealthCard({
       <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid rgba(10,14,26,0.06)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 3 }}>Across the organisation</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#5A6880', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "var(--font-sans)", marginBottom: 3 }}>Across the organisation</div>
             <h3 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: '#0A0E1A', margin: 0, letterSpacing: '-0.01em' }}>Where things stand</h3>
           </div>
           <div ref={explainRef} style={{ position: 'relative' }}>
             <button className="ghost-btn" onClick={() => setExplainOpen((v) => !v)} style={{ padding: '4px 10px', fontSize: 11 }}>✦ Explain</button>
             {explainOpen && (
               <div className="dropdown-pop" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, background: 'white', border: '1px solid rgba(10,14,26,0.08)', borderRadius: 10, boxShadow: '0 8px 24px rgba(10,14,26,0.12)', padding: 12, zIndex: 30 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7A94', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'Inter', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#5A6880', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "var(--font-sans)", marginBottom: 8 }}>
                   Why each status
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {domains.map((d) => (
-                    <div key={d.key} style={{ fontSize: 12, lineHeight: 1.5, fontFamily: 'Inter' }}>
+                    <div key={d.key} style={{ fontSize: 12, lineHeight: 1.5, fontFamily: "var(--font-sans)" }}>
                       <span style={{ fontWeight: 700, color: '#0A0E1A' }}>{d.label} — </span>
-                      <span style={{ color: '#6B7A94' }}>{d.tileHeadline}, {d.tileSupporting}.</span>
+                      <span style={{ color: '#5A6880' }}>{d.tileHeadline}, {d.tileSupporting}.</span>
                     </div>
                   ))}
                 </div>
@@ -727,10 +738,10 @@ function EnterpriseHealthCard({
           centerLabel="areas"
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: attentionCount > 0 ? '#B45309' : '#059669', fontFamily: 'Inter' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: attentionCount > 0 ? '#B45309' : '#059669', fontFamily: "var(--font-sans)" }}>
             {attentionCount === 0 ? 'Every area is on track' : `${attentionCount} area${attentionCount === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} attention`}
           </div>
-          <div style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter', marginTop: 2 }}>{attentionSummary}</div>
+          <div style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)", marginTop: 2 }}>{attentionSummary}</div>
         </div>
       </div>
 
@@ -757,21 +768,21 @@ function EnterpriseHealthCard({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 6, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F8A4B', flexShrink: 0 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 6, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A42', flexShrink: 0 }}>
                     {(() => { const Icon = DOMAIN_ICON_COMPONENT[d.key]; return <Icon size={12} strokeWidth={2.25} /> })()}
                   </span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#6B7A94', fontFamily: 'Inter' }}>{d.label}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{d.label}</span>
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: statusColors[d.tileStatusTone], background: `${statusColors[d.tileStatusTone]}12`, border: `1px solid ${statusColors[d.tileStatusTone]}30`, borderRadius: 5, padding: '1px 7px', fontFamily: 'Inter', flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: statusColors[d.tileStatusTone], background: `${statusColors[d.tileStatusTone]}12`, border: `1px solid ${statusColors[d.tileStatusTone]}30`, borderRadius: 5, padding: '1px 7px', fontFamily: "var(--font-sans)", flexShrink: 0 }}>
                   <StatusDot status={d.tileStatusTone} />{statusChipLabels[d.tileStatusTone]}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 8 }}>
                 <div>
                   <div className="font-display" style={{ fontSize: 16, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em', lineHeight: 1.25, marginBottom: 3 }}>{d.tileHeadline}</div>
-                  <div style={{ fontSize: 11.5, color: '#6B7A94', fontFamily: 'Inter' }}>{d.tileSupporting}</div>
+                  <div style={{ fontSize: 11.5, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{d.tileSupporting}</div>
                 </div>
-                <span aria-hidden style={{ color: '#0F8A4B', fontSize: 15, flexShrink: 0, opacity: 0.6 }}>↗</span>
+                <span aria-hidden style={{ color: '#0D7A42', fontSize: 15, flexShrink: 0, opacity: 0.6 }}>↗</span>
               </div>
             </div>
           )
@@ -780,8 +791,8 @@ function EnterpriseHealthCard({
 
       {/* Footer */}
       <div style={{ padding: '12px 24px', borderTop: '1px solid rgba(10,14,26,0.06)', background: '#FAFBFD', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>Data as of {asOfLabel} · Microsoft Fabric</span>
-        <a href="#business-domains" style={{ fontSize: 11, color: '#0F8A4B', fontFamily: 'Inter', fontWeight: 500, textDecoration: 'none' }}>See all areas →</a>
+        <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>Data as of {asOfLabel}</span>
+        <a href="#business-domains" style={{ fontSize: 11, color: '#0D7A42', fontFamily: "var(--font-sans)", fontWeight: 500, textDecoration: 'none' }}>See all areas →</a>
       </div>
     </div>
   )
@@ -896,8 +907,8 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
   }
 
   const statusStyles: Record<RiskStatus, { label: string; bg: string; text: string }> = {
-    open: { label: 'Open', bg: '#F4F6F9', text: '#6B7A94' },
-    investigating: { label: 'Investigating', bg: 'rgba(15, 138, 75,0.07)', text: '#0F8A4B' },
+    open: { label: 'Open', bg: '#F4F6F9', text: '#5A6880' },
+    investigating: { label: 'Investigating', bg: 'rgba(13, 122, 66,0.07)', text: '#0D7A42' },
     escalated: { label: 'Escalated', bg: 'rgba(220,38,38,0.07)', text: '#B91C1C' },
     resolved: { label: 'Resolved', bg: 'rgba(5,150,105,0.07)', text: '#047857' },
   }
@@ -963,7 +974,12 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F4F6F9' }}>
+    // overflowX 'clip' rather than 'hidden': the decorative hero glow below is
+    // deliberately oversized and bleeds past the right edge, which was making
+    // the whole page scroll sideways on phones and tablets. 'clip' contains it
+    // without creating a scroll container - 'hidden' would, and that would
+    // silently break the command bar's position:sticky.
+    <div style={{ minHeight: '100vh', background: '#F4F6F9', overflowX: 'clip' }}>
 
       <CommandBar
         domains={domains}
@@ -996,16 +1012,16 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               width: 460,
               height: 460,
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(15,138,75,0.14) 0%, rgba(15,138,75,0) 70%)',
+              background: 'radial-gradient(circle, rgba(13, 122, 66,0.14) 0%, rgba(13, 122, 66,0) 70%)',
               pointerEvents: 'none',
               zIndex: 0,
             }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, position: 'relative', zIndex: 1 }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', margin: '0 0 8px' }}>{dateStr}</p>
+              <p style={{ fontSize: 11, fontWeight: 600, color: '#5A6880', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "var(--font-sans)", margin: '0 0 8px' }}>{dateStr}</p>
               <h1 className="font-display" style={{ fontSize: 'clamp(28px,5vw,52px)', fontWeight: 800, color: '#0A0E1A', letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0 }}>Good {timeOfDay}, {greetingName}.</h1>
-              <p style={{ fontSize: 16, color: '#6B7A94', marginTop: 10, fontFamily: 'Inter', fontWeight: 400, letterSpacing: '-0.01em' }}>{heroSubLine}</p>
+              <p style={{ fontSize: 16, color: '#5A6880', marginTop: 10, fontFamily: "var(--font-sans)", fontWeight: 400, letterSpacing: '-0.01em' }}>{heroSubLine}</p>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="ghost-btn" onClick={downloadReport} style={{ padding: '8px 16px' }}>Generate Board Report</button>
@@ -1021,10 +1037,10 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                   <AiBadge label="Ada's Briefing" />
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#0F8A4B', fontFamily: 'Inter', fontWeight: 600 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#0D7A42', fontFamily: "var(--font-sans)", fontWeight: 600 }}>
                     <LiveDot size={7} /> Live
                   </span>
-                  <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>As of {asOfLabel}</span>
+                  <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>As of {asOfLabel}</span>
                 </div>
                 <h2 className="font-display" style={{ fontSize: 22, fontWeight: 700, color: '#0A0E1A', margin: 0, letterSpacing: '-0.02em' }}>Today's Executive Summary</h2>
               </div>
@@ -1044,11 +1060,11 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                 centerLabel="open"
               />
               <div>
-                <div style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Your Risk Queue</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: riskCounts.high > 0 ? '#B91C1C' : '#059669', fontFamily: 'Inter', marginBottom: 2 }}>
+                <div style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)", marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Your Risk Queue</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: riskCounts.high > 0 ? '#B91C1C' : '#059669', fontFamily: "var(--font-sans)", marginBottom: 2 }}>
                   {riskCounts.high > 0 ? `${riskCounts.high} high priority` : 'Nothing high priority'}
                 </div>
-                <div style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>{riskCounts.medium} medium &nbsp;·&nbsp; {riskCounts.low} low</div>
+                <div style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{riskCounts.medium} medium &nbsp;·&nbsp; {riskCounts.low} low</div>
               </div>
             </div>
             <div style={{ marginBottom: 20, minHeight: 74 }}>
@@ -1063,11 +1079,11 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                 >
                   {briefPoints[briefIndex]?.tone === 'critical' && <span style={{ marginTop: 5, flexShrink: 0 }}><LiveDot color="#DC2626" size={7} /></span>}
                   <div>
-                    <p style={{ fontSize: 15, lineHeight: 1.6, fontFamily: 'Inter', fontWeight: 600, color: BRIEF_TONE_COLORS[briefPoints[briefIndex]?.tone ?? 'good'], margin: 0 }}>
+                    <p style={{ fontSize: 15, lineHeight: 1.6, fontFamily: "var(--font-sans)", fontWeight: 600, color: BRIEF_TONE_COLORS[briefPoints[briefIndex]?.tone ?? 'good'], margin: 0 }}>
                       {briefPoints[briefIndex]?.lead ?? briefSummary}
                     </p>
                     {briefPoints[briefIndex]?.detail && (
-                      <p style={{ fontSize: 13.5, lineHeight: 1.6, fontFamily: 'Inter', fontWeight: 400, color: '#6B7A94', margin: '4px 0 0' }}>
+                      <p style={{ fontSize: 13.5, lineHeight: 1.6, fontFamily: "var(--font-sans)", fontWeight: 400, color: '#5A6880', margin: '4px 0 0' }}>
                         {briefPoints[briefIndex].detail}
                       </p>
                     )}
@@ -1081,14 +1097,19 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                       key={i}
                       onClick={() => setBriefIndex(i)}
                       aria-label={`Show insight ${i + 1}`}
-                      style={{ width: i === briefIndex ? 18 : 6, height: 4, borderRadius: 2, background: i === briefIndex ? '#0F8A4B' : 'rgba(10,14,26,0.12)', border: 'none', padding: 0, cursor: 'pointer', transition: 'width 0.3s, background 0.3s' }}
+                      aria-current={i === briefIndex}
+                      // Uniform segments whose colour changes, rather than a
+                      // pill that animates from 6px to 18px. Animating `width`
+                      // reflows the row on every frame; colour alone doesn't
+                      // touch layout and reads as a cleaner progress bar.
+                      style={{ width: 18, height: 4, borderRadius: 2, background: i === briefIndex ? '#0D7A42' : 'rgba(10,14,26,0.14)', border: 'none', padding: 0, cursor: 'pointer', transition: 'background 0.3s' }}
                     />
                   ))}
                 </div>
               )}
             </div>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#6B7A94', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, fontFamily: 'Inter' }}>Recommended Actions</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#5A6880', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, fontFamily: "var(--font-sans)" }}>Recommended Actions</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 <button className="ms-blue-btn" onClick={() => handleDomainClick('partners')} style={{ padding: '7px 14px' }}>
                   See the {overduePartnersCount} late partner{overduePartnersCount === 1 ? '' : 's'}
@@ -1118,12 +1139,12 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 3 }}>Live Business Issues</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#5A6880', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "var(--font-sans)", marginBottom: 3 }}>Live Business Issues</div>
                 <h3 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: '#0A0E1A', margin: 0, letterSpacing: '-0.01em' }}>Enterprise Risk Center</h3>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {([['all', 'All', '#6B7A94'], ['money', CATEGORY_LABELS.money, CATEGORY_COLORS.money], ['credit', CATEGORY_LABELS.credit, CATEGORY_COLORS.credit], ['compliance', CATEGORY_LABELS.compliance, CATEGORY_COLORS.compliance], ['reporting', CATEGORY_LABELS.reporting, CATEGORY_COLORS.reporting]] as [RiskFilter, string, string][])
+                  {([['all', 'All', '#5A6880'], ['money', CATEGORY_LABELS.money, CATEGORY_COLORS.money], ['credit', CATEGORY_LABELS.credit, CATEGORY_COLORS.credit], ['compliance', CATEGORY_LABELS.compliance, CATEGORY_COLORS.compliance], ['reporting', CATEGORY_LABELS.reporting, CATEGORY_COLORS.reporting]] as [RiskFilter, string, string][])
                     .filter(([f]) => categoryCounts[f] > 0)
                     .map(([f, label, color]) => (
                     <button
@@ -1134,11 +1155,11 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                         borderRadius: 20,
                         border: riskFilter === f ? `1.5px solid ${color}` : '1px solid rgba(10,14,26,0.1)',
                         background: riskFilter === f ? `${color}0D` : 'white',
-                        color: riskFilter === f ? color : '#6B7A94',
+                        color: riskFilter === f ? color : '#5A6880',
                         fontSize: 12,
                         fontWeight: riskFilter === f ? 700 : 400,
                         cursor: 'pointer',
-                        fontFamily: 'Inter',
+                        fontFamily: "var(--font-sans)",
                         transition: 'all 0.15s',
                       }}
                     >
@@ -1153,8 +1174,8 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                     <div className="dropdown-pop" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280, background: 'white', border: '1px solid rgba(10,14,26,0.08)', borderRadius: 10, boxShadow: '0 8px 24px rgba(10,14,26,0.12)', padding: 12, zIndex: 30 }}>
                       {mostUrgentRisk ? (
                         <>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7A94', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'Inter', marginBottom: 6 }}>Most urgent</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#0A0E1A', fontFamily: 'Inter', marginBottom: 8 }}>{mostUrgentRisk.title}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#5A6880', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "var(--font-sans)", marginBottom: 6 }}>Most urgent</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#0A0E1A', fontFamily: "var(--font-sans)", marginBottom: 8 }}>{mostUrgentRisk.title}</div>
                           <button
                             className="ms-blue-btn"
                             style={{ padding: '6px 12px', fontSize: 12 }}
@@ -1164,7 +1185,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                           </button>
                         </>
                       ) : (
-                        <div style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>No open risks right now.</div>
+                        <div style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)" }}>No open risks right now.</div>
                       )}
                     </div>
                   )}
@@ -1175,7 +1196,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
             {/* Summary line - one sentence a reader can act on, instead of
                 four pills that all say "some things are wrong" without
                 saying what's actually at stake. */}
-            <div style={{ fontSize: 14, color: '#1A2035', fontFamily: 'Inter' }}>
+            <div style={{ fontSize: 14, color: '#1A2035', fontFamily: "var(--font-sans)" }}>
               <span style={{ fontWeight: 700 }}>{risks.length} open issue{risks.length === 1 ? '' : 's'}</span>
               {heldUpTotal > 0 && <> · <span style={{ fontWeight: 700, color: '#B91C1C' }}>{formatNaira(heldUpTotal)}</span> held up</>}
               {oldestAgeDays > 0 && <> · oldest {oldestAgeDays} days</>}
@@ -1190,7 +1211,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               more than one severity. */}
           <div>
             {filteredRisks.length === 0 && (
-              <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#6B7A94', fontFamily: 'Inter' }}>No items match this filter.</div>
+              <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#5A6880', fontFamily: "var(--font-sans)" }}>No items match this filter.</div>
             )}
             {(() => {
               const visibleTierCount = (['high', 'medium', 'low'] as const).filter((tier) => filteredRisks.some((r) => r.priority === tier)).length
@@ -1212,8 +1233,8 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                   {visibleTierCount > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: pc.dot, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: pc.text, fontFamily: 'Inter', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{tierLabel}</span>
-                      <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>({tierRisks.length})</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: pc.text, fontFamily: "var(--font-sans)", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{tierLabel}</span>
+                      <span style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)" }}>({tierRisks.length})</span>
                     </div>
                   )}
                   <motion.div
@@ -1253,12 +1274,12 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
                               <span style={{ width: 30, height: 30, borderRadius: 8, background: `${pc.dot}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: pc.text, flexShrink: 0 }}>
                                 {(() => { const Icon = RISK_SOURCE_ICON[risk.subtitle] ?? Landmark; return <Icon size={15} strokeWidth={2} /> })()}
                               </span>
-                              <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, fontFamily: 'Inter', background: ss.bg, color: ss.text, flexShrink: 0 }}>{ss.label}</span>
+                              <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 10.5, fontWeight: 600, fontFamily: "var(--font-sans)", background: ss.bg, color: ss.text, flexShrink: 0 }}>{ss.label}</span>
                             </div>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0A0E1A', fontFamily: 'Inter', lineHeight: 1.35, marginBottom: 4 }}>{risk.title}</div>
-                            <div style={{ fontSize: 11.5, color: '#6B7A94', fontFamily: 'Inter', marginBottom: 12, lineHeight: 1.4 }}>{risk.description}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0A0E1A', fontFamily: "var(--font-sans)", lineHeight: 1.35, marginBottom: 4 }}>{risk.title}</div>
+                            <div style={{ fontSize: 11.5, color: '#5A6880', fontFamily: "var(--font-sans)", marginBottom: 12, lineHeight: 1.4 }}>{risk.description}</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 4 }}>
-                              <span style={{ fontSize: 11, color: '#0F8A4B', fontFamily: 'Inter', fontWeight: 500 }}>{risk.assignedTo ?? ''}</span>
+                              <span style={{ fontSize: 11, color: '#0D7A42', fontFamily: "var(--font-sans)", fontWeight: 500 }}>{risk.assignedTo ?? ''}</span>
                               <button
                                 className="ms-blue-btn"
                                 style={{ padding: '5px 12px', fontSize: 11.5, flexShrink: 0 }}
@@ -1281,7 +1302,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
           {/* Footer - a plain hairline rule, not a filled bar, since there's
               no card edge underneath it to anchor a footer strip to. */}
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(10,14,26,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter' }}>Showing {filteredRisks.length} of {risks.length} items · Data as of {asOfLabel}</span>
+            <span style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)" }}>Showing {filteredRisks.length} of {risks.length} items · Data as of {asOfLabel}</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="ghost-btn" onClick={() => setShowResolvedOnly((v) => !v)} style={{ padding: '4px 12px', fontSize: 12 }}>
                 {showResolvedOnly ? 'Show all items' : 'View resolved items'}
@@ -1295,10 +1316,10 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
         <div id="business-domains" style={{ marginBottom: 20, scrollMarginTop: 72 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 3 }}>Business Domains</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#5A6880', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "var(--font-sans)", marginBottom: 3 }}>Business Domains</div>
               <h3 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: '#0A0E1A', margin: 0 }}>Decision Workspaces</h3>
             </div>
-            <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>Select a domain to open its workspace →</span>
+            <span style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)" }}>Select a domain to open its workspace →</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
             {domains.map((domain) => {
@@ -1309,35 +1330,35 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
               // analysis paragraph, rather than repeating the tile's own
               // headline verbatim - this card's job is "why would I open the
               // workspace", not a rerun of the summary above it.
-              const statusColors = { healthy: '#059669', attention: '#D97706', critical: '#DC2626' }
+              const statusColors = STATUS_COLORS
               const statusChipLabels = { healthy: 'On track', attention: 'Watch', critical: 'Needs attention' }
               const headlineKpi = domain.kpis.find((k) => k.key === DOMAIN_HEADLINE_KPI_KEY[domain.key]) ?? domain.kpis[0]
               return (
                 <div key={domain.key} className="domain-card" onClick={() => setActiveWorkspace(domain)} style={{ padding: 22 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F8A4B' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#E7F6ED,#DCF3E3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0D7A42' }}>
                         {(() => { const Icon = DOMAIN_ICON_COMPONENT[domain.key]; return <Icon size={18} strokeWidth={2} /> })()}
                       </div>
                       <div>
                         <div className="font-display" style={{ fontSize: 14, fontWeight: 700, color: '#0A0E1A' }}>{domain.label}</div>
-                        <div style={{ fontSize: 11, color: '#6B7A94', fontFamily: 'Inter', marginTop: 1 }}>{DOMAIN_TAGLINES[domain.key]}</div>
+                        <div style={{ fontSize: 11, color: '#5A6880', fontFamily: "var(--font-sans)", marginTop: 1 }}>{DOMAIN_TAGLINES[domain.key]}</div>
                       </div>
                     </div>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: statusColors[domain.tileStatusTone], background: `${statusColors[domain.tileStatusTone]}10`, border: `1px solid ${statusColors[domain.tileStatusTone]}25`, borderRadius: 6, padding: '2px 8px', fontFamily: 'Inter', flexShrink: 0 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: statusColors[domain.tileStatusTone], background: `${statusColors[domain.tileStatusTone]}10`, border: `1px solid ${statusColors[domain.tileStatusTone]}25`, borderRadius: 6, padding: '2px 8px', fontFamily: "var(--font-sans)", flexShrink: 0 }}>
                       <StatusDot status={domain.tileStatusTone} />{statusChipLabels[domain.tileStatusTone]}
                     </span>
                   </div>
                   {headlineKpi && (
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
                       <span className="font-display" style={{ fontSize: 24, fontWeight: 700, color: '#0A0E1A', letterSpacing: '-0.01em' }}>{headlineKpi.value}</span>
-                      <span style={{ fontSize: 12, color: '#6B7A94', fontFamily: 'Inter' }}>{headlineKpi.label}</span>
+                      <span style={{ fontSize: 12, color: '#5A6880', fontFamily: "var(--font-sans)" }}>{headlineKpi.label}</span>
                     </div>
                   )}
-                  <p style={{ fontSize: 12, color: '#6B7A94', lineHeight: 1.6, margin: '0 0 14px', fontFamily: 'Inter', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{domain.aiSummary}</p>
+                  <p style={{ fontSize: 12, color: '#5A6880', lineHeight: 1.6, margin: '0 0 14px', fontFamily: "var(--font-sans)", display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{domain.aiSummary}</p>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <AiBadge />
-                    <span style={{ fontSize: 12, color: '#0F8A4B', fontWeight: 500, fontFamily: 'Inter' }}>Open Workspace →</span>
+                    <span style={{ fontSize: 12, color: '#0D7A42', fontWeight: 500, fontFamily: "var(--font-sans)" }}>Open Workspace →</span>
                   </div>
                 </div>
               )
@@ -1349,7 +1370,7 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
         <div className="enterprise-card" style={{ padding: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7A94', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 3 }}>Recent activity</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#5A6880', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "var(--font-sans)", marginBottom: 3 }}>Recent activity</div>
               <h3 className="font-display" style={{ fontSize: 17, fontWeight: 700, color: '#0A0E1A', margin: 0 }}>Activity Timeline</h3>
             </div>
             {timeline.length > 4 && (
@@ -1362,22 +1383,22 @@ export function Dashboard({ greetingName, briefSummary, briefPoints, asOfLabel, 
             <div style={{ position: 'absolute', left: 52, top: 0, bottom: 0, width: 1, background: 'rgba(10,14,26,0.06)' }} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {(timelineExpanded ? timeline : timeline.slice(0, 4)).map((event, i) => {
-                const catColors: Record<string, string> = { Lending: '#0F8A4B', Finance: '#7C3AED', Partners: '#059669', 'AI Insight': '#D97706', Executive: '#0A0E1A', Procurement: '#0891B2' }
-                const color = catColors[event.category] || '#6B7A94'
+                const catColors: Record<string, string> = { Lending: '#0D7A42', Finance: '#7C3AED', Partners: '#059669', 'AI Insight': '#D97706', Executive: '#0A0E1A', Procurement: '#0891B2' }
+                const color = catColors[event.category] || '#5A6880'
                 return (
                   <div key={i} style={{ display: 'flex', gap: 20, padding: '12px 0', alignItems: 'flex-start' }}>
                     <div style={{ width: 40, flexShrink: 0, textAlign: 'right', paddingTop: 2 }}>
-                      <span className="font-mono" style={{ fontSize: 11, color: '#6B7A94', letterSpacing: '0.05em' }}>{event.time}</span>
+                      <span className="font-mono" style={{ fontSize: 11, color: '#5A6880', letterSpacing: '0.05em' }}>{event.time}</span>
                     </div>
                     <div style={{ position: 'relative', zIndex: 1, flexShrink: 0, paddingTop: 6 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: event.aiGenerated ? '#D97706' : color, border: '2px solid white', boxShadow: `0 0 0 1px ${event.aiGenerated ? '#D97706' : color}30` }} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 10, fontWeight: 600, color, background: `${color}10`, border: `1px solid ${color}25`, borderRadius: 4, padding: '1px 6px', fontFamily: 'Inter', letterSpacing: '0.04em' }}>{event.category}</span>
-                        {event.aiGenerated && <span style={{ fontSize: 10, color: '#D97706', fontWeight: 600, fontFamily: 'Inter' }}>✦ AI Detected</span>}
+                        <span style={{ fontSize: 10, fontWeight: 600, color, background: `${color}10`, border: `1px solid ${color}25`, borderRadius: 4, padding: '1px 6px', fontFamily: "var(--font-sans)", letterSpacing: '0.04em' }}>{event.category}</span>
+                        {event.aiGenerated && <span style={{ fontSize: 10, color: '#D97706', fontWeight: 600, fontFamily: "var(--font-sans)" }}>✦ AI Detected</span>}
                       </div>
-                      <p style={{ margin: 0, fontSize: 13, color: '#1A2035', lineHeight: 1.55, fontFamily: 'Inter' }}>{event.description}</p>
+                      <p style={{ margin: 0, fontSize: 13, color: '#1A2035', lineHeight: 1.55, fontFamily: "var(--font-sans)" }}>{event.description}</p>
                     </div>
                   </div>
                 )

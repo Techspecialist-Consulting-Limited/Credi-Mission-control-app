@@ -617,7 +617,7 @@ export async function getProcurementOverview(): Promise<PersonaOverview> {
         subtitle: `Across ${contracts.length} awarded contract(s)`,
         labels: Object.keys(deliveryCounts).filter((k) => deliveryCounts[k] > 0),
         values: Object.keys(deliveryCounts).filter((k) => deliveryCounts[k] > 0).map((k) => deliveryCounts[k]),
-        colors: ["#0F8A4B", "#D97706", "#6B7A94", "#DC2626"],
+        colors: ["#0D7A42", "#D97706", "#5A6880", "#DC2626"],
         format: "count",
       },
       {

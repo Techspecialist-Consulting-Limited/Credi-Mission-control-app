@@ -24,7 +24,7 @@ export default async function MandateReachSegmentsDrill({ params }: { params: Pr
       <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12, marginBottom: 20 }}>
         <AnimatedGridItem>
           <div className="enterprise-card" style={{ padding: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#6B7A94", fontFamily: "Inter", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total reached</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#5A6880", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total reached</div>
             <div className="font-display" style={{ fontSize: 24, fontWeight: 800, color: "#0A0E1A", marginTop: 6 }}>
               <AnimatedNumber value={totalCount.toLocaleString()} />
             </div>
@@ -32,13 +32,13 @@ export default async function MandateReachSegmentsDrill({ params }: { params: Pr
         </AnimatedGridItem>
         <AnimatedGridItem>
           <div className="enterprise-card" style={{ padding: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#6B7A94", fontFamily: "Inter", textTransform: "uppercase", letterSpacing: "0.05em" }}>Leading sector</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#5A6880", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Leading sector</div>
             <div className="font-display" style={{ fontSize: 24, fontWeight: 800, color: "#0A0E1A", marginTop: 6 }}>{leading?.sector ?? "—"}</div>
           </div>
         </AnimatedGridItem>
         <AnimatedGridItem>
           <div className="enterprise-card" style={{ padding: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#6B7A94", fontFamily: "Inter", textTransform: "uppercase", letterSpacing: "0.05em" }}>First-time borrowers</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#5A6880", fontFamily: "var(--font-sans)", textTransform: "uppercase", letterSpacing: "0.05em" }}>First-time borrowers</div>
             <div className="font-display" style={{ fontSize: 24, fontWeight: 800, color: "#0A0E1A", marginTop: 6 }}>
               <AnimatedNumber value={`${firstTimeSharePct}%`} />
             </div>
@@ -49,7 +49,7 @@ export default async function MandateReachSegmentsDrill({ params }: { params: Pr
       <div className="enterprise-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "32px 1.5fr 1fr 1fr", gap: 12, padding: "12px 24px", borderBottom: "1px solid rgba(10,14,26,0.06)", background: "#FAFBFD" }}>
           {["", "Sector", "Beneficiaries", "First-time borrowers"].map((h, i) => (
-            <span key={i} style={{ fontSize: 11, fontWeight: 700, color: "#6B7A94", textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "Inter" }}>
+            <span key={i} style={{ fontSize: 11, fontWeight: 700, color: "#5A6880", textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "var(--font-sans)" }}>
               {h}
             </span>
           ))}
@@ -59,16 +59,16 @@ export default async function MandateReachSegmentsDrill({ params }: { params: Pr
             <AnimatedGridItem key={s.sector}>
               <div style={{ display: "grid", gridTemplateColumns: "32px 1.5fr 1fr 1fr", gap: 12, padding: "14px 24px", alignItems: "center", borderBottom: i === segments.length - 1 ? "none" : "1px solid rgba(10,14,26,0.055)" }}>
                 <span className="font-mono" style={{ fontSize: 11, color: "#9AA5B1" }}>{String(i + 1).padStart(2, "0")}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#0A0E1A", fontFamily: "Inter" }}>{s.sector}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#0A0E1A", fontFamily: "var(--font-sans)" }}>{s.sector}</span>
                 <span className="font-display" style={{ fontSize: 14, fontWeight: 700, color: "#0A0E1A" }}>{s.count.toLocaleString()}</span>
-                <span style={{ fontSize: 12, color: "#059669", fontFamily: "Inter", fontWeight: 500 }}>
+                <span style={{ fontSize: 12, color: "#059669", fontFamily: "var(--font-sans)", fontWeight: 500 }}>
                   {s.firstTimeBorrowerCount.toLocaleString()} ({s.count > 0 ? Math.round((s.firstTimeBorrowerCount / s.count) * 100) : 0}%)
                 </span>
               </div>
             </AnimatedGridItem>
           ))}
         </AnimatedGrid>
-        {segments.length === 0 && <div style={{ padding: 24, fontSize: 13, color: "#6B7A94", fontFamily: "Inter" }}>No beneficiaries recorded for this state.</div>}
+        {segments.length === 0 && <div style={{ padding: 24, fontSize: 13, color: "#5A6880", fontFamily: "var(--font-sans)" }}>No beneficiaries recorded for this state.</div>}
       </div>
     </DrillShell>
   );

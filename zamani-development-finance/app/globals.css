@@ -1,6 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts are loaded by next/font in app/layout.tsx (self-hosted, non-blocking)
+   and exposed as --font-inter / --font-jetbrains. The @import lines that used
+   to sit here required a second network round-trip to Google before any text
+   could paint. */
 @import "tailwindcss";
 
 @theme inline {
@@ -28,17 +29,38 @@
   --foreground: #0A0E1A;
   --card: #FFFFFF;
   --card-foreground: #0A0E1A;
-  --primary: #0F8A4B;
+  --primary: #0D7A42;
   --primary-foreground: #FFFFFF;
   --secondary: #EEF2F7;
   --secondary-foreground: #2D3748;
   --muted: #E8ECF2;
-  --muted-foreground: #6B7A94;
-  --accent: #0F8A4B;
+  --muted-foreground: #5A6880; /* 5.21:1 on --background, AA for body text */
+  --accent: #0D7A42;
   --accent-foreground: #FFFFFF;
   --border: rgba(10, 14, 26, 0.08);
-  --ring: #0F8A4B;
+  --ring: #0D7A42;
   --radius: 12px;
+
+  /* Font stacks. Referenced by name from inline styles across the app so
+     there's one place to change a face. */
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
+
+  /* Semantic stacking order. Previously these were scattered literals (30,
+     60, 100, 101, 150, 200) chosen ad hoc, which is how the Ask Ada launcher
+     ended up floating above the workspace panel and the nav sheet. Layers are
+     named by role so the order is arguable rather than accidental. */
+  --z-content: 1;
+  --z-panel-header: 10;
+  --z-popover: 30;
+  --z-dropdown: 60;
+  --z-fab: 90;
+  --z-overlay: 100;
+  --z-modal: 110;
+  --z-chat: 120;
+  --z-nav-backdrop: 140;
+  --z-nav-sheet: 145;
+  --z-header: 150;
 }
 
 * {
@@ -49,14 +71,52 @@ html {
   scroll-behavior: smooth;
 }
 
-html, body, #root {
+html {
   height: 100%;
+}
+
+/* min-height, not height.
+   `height: 100%` pinned <body> to exactly one viewport, and because
+   layout.tsx makes <body> a `flex flex-col` container, its single child - the
+   page wrapper every screen renders inside - got shrunk to that same 900-odd
+   pixels while its content overflowed. A position:sticky element can only
+   travel within its containing block, so the command bar stopped sticking the
+   moment you scrolled past the wrapper's bottom edge and slid off the top of
+   the screen. Letting <body> grow with its content keeps the wrapper as tall
+   as the page, so the bar stays put all the way down. */
+body {
+  min-height: 100%;
+}
+
+html, body {
   margin: 0;
   padding: 0;
 }
 
 button, a {
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ── Focus ──────────────────────────────────────────────────────────────────
+   Every control previously fell through to the UA's 1px `outline: auto`, and
+   the search input suppressed its outline entirely in favour of a background
+   change on the parent - which means keyboard users had no reliable way to
+   tell where they were. This is a designed ring in the brand green, offset so
+   it reads clearly against both white cards and the tinted body.
+
+   :focus-visible rather than :focus so it appears for keyboard and
+   programmatic focus but not on mouse clicks. */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The search field sits inside a styled wrapper that already reacts to
+   focus-within, so its own ring would double up - it gets the ring on the
+   wrapper instead (see .search-bar:focus-within). */
+.search-bar input:focus-visible {
+  outline: none;
 }
 
 @keyframes popIn {
@@ -71,7 +131,7 @@ button, a {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Fixed-width digits everywhere by default, so updating figures (KPIs,
@@ -81,12 +141,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The display role is now weight and tracking rather than a second family.
+   Inter tightens up well at large sizes; the negative tracking is what gives
+   headings their set-by-hand feel, and it stays well inside the -0.04em floor
+   where letterforms start colliding. */
 .font-display {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.021em;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 /* Scrollbar */
@@ -128,13 +194,13 @@ body {
 }
 
 @keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(15, 138, 75, 0.12); }
-  50% { box-shadow: 0 0 0 9px rgba(15, 138, 75, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 122, 66, 0.14); }
+  50% { box-shadow: 0 0 0 9px rgba(13, 122, 66, 0); }
 }
 
 .ai-glow {
   background: linear-gradient(135deg, #eef9f1 0%, #e5f5e9 50%, #eef7f0 100%);
-  border: 1px solid rgba(15, 138, 75, 0.15);
+  border: 1px solid rgba(13, 122, 66, 0.18);
   animation: breathe 5s ease-in-out infinite;
 }
 
@@ -162,17 +228,32 @@ body {
   transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Opaque rather than a 24px backdrop blur. At 96% opacity the blur was doing
+   almost nothing visible, while forcing the compositor to re-blur everything
+   scrolling underneath a full-width sticky bar - the most expensive place in
+   the app to put that effect. */
 .command-bar {
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: #FFFFFF;
   border-bottom: 1px solid rgba(10, 14, 26, 0.07);
 }
 
+/* The four source-system names are long, so on narrower desktops this row
+   scrolls. The scrollbar is hidden for looks, which previously meant items
+   were silently cut off with no hint they existed - the mask fades the right
+   edge only while there is actually more to scroll to, so the affordance
+   appears exactly when it's true and vanishes when everything fits. */
 .nav-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
 }
+
+.nav-scroll[data-fits="true"] {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
 .nav-scroll::-webkit-scrollbar {
   display: none;
 }
@@ -196,11 +277,11 @@ body {
 }
 
 .ms-blue-btn {
-  background: #0F8A4B;
+  background: #0D7A42;
   color: white;
   border: none;
   border-radius: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 500;
   font-size: 13px;
   cursor: pointer;
@@ -208,16 +289,16 @@ body {
 }
 
 .ms-blue-btn:hover {
-  background: #0B6B3A;
+  background: #0A6335;
   transform: translateY(-1px);
 }
 
 .ghost-btn {
   background: transparent;
-  color: #0F8A4B;
-  border: 1px solid rgba(15, 138, 75, 0.25);
+  color: #0D7A42;
+  border: 1px solid rgba(13, 122, 66, 0.3);
   border-radius: 8px;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 500;
   font-size: 13px;
   cursor: pointer;
@@ -225,8 +306,8 @@ body {
 }
 
 .ghost-btn:hover {
-  background: rgba(15, 138, 75, 0.06);
-  border-color: rgba(15, 138, 75, 0.45);
+  background: rgba(13, 122, 66, 0.07);
+  border-color: rgba(13, 122, 66, 0.5);
 }
 
 .domain-card {
@@ -239,8 +320,8 @@ body {
 }
 
 .domain-card:hover {
-  border-color: rgba(15, 138, 75, 0.3);
-  box-shadow: 0 2px 6px rgba(10, 14, 26, 0.07), 0 12px 32px rgba(15, 138, 75, 0.08);
+  border-color: rgba(13, 122, 66, 0.32);
+  box-shadow: 0 2px 6px rgba(10, 14, 26, 0.07), 0 12px 32px rgba(13, 122, 66, 0.09);
   transform: translateY(-2px);
 }
 
@@ -248,7 +329,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #0F8A4B;
+  background: #0D7A42;
   flex-shrink: 0;
   margin-top: 5px;
 }
@@ -258,7 +339,7 @@ body {
   inset: 0;
   background: rgba(10, 14, 26, 0.4);
   backdrop-filter: blur(8px);
-  z-index: 100;
+  z-index: var(--z-overlay);
   animation: fadeIn 0.25s ease;
 }
 
@@ -269,7 +350,7 @@ body {
   bottom: 0;
   width: 680px;
   background: #F4F6F9;
-  z-index: 101;
+  z-index: var(--z-modal);
   overflow-y: auto;
   animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: -8px 0 40px rgba(10, 14, 26, 0.12);
@@ -286,7 +367,7 @@ body {
 }
 
 .score-arc {
-  filter: drop-shadow(0 0 12px rgba(15, 138, 75, 0.3));
+  filter: drop-shadow(0 0 12px rgba(13, 122, 66, 0.32));
 }
 
 .notification-dot {
@@ -307,10 +388,12 @@ body {
   transition: all 0.2s ease;
 }
 
+/* Carries the focus ring on behalf of the input inside it, so the affordance
+   is as visible as every other control's. */
 .search-bar:focus-within {
   background: white;
-  border-color: rgba(15, 138, 75, 0.4);
-  box-shadow: 0 0 0 3px rgba(15, 138, 75, 0.1);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(13, 122, 66, 0.22);
 }
 
 .pipeline-node {
@@ -328,7 +411,7 @@ body {
 .pipeline-connector {
   width: 32px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(15, 138, 75,0.3), rgba(15, 138, 75,0.6));
+  background: linear-gradient(90deg, rgba(13, 122, 66,0.32), rgba(13, 122, 66,0.62));
   position: relative;
   flex-shrink: 0;
   align-self: center;
@@ -341,13 +424,77 @@ body {
   top: -3px;
   width: 7px;
   height: 7px;
-  border-right: 1.5px solid rgba(15, 138, 75,0.6);
-  border-top: 1.5px solid rgba(15, 138, 75,0.6);
+  border-right: 1.5px solid rgba(13, 122, 66,0.62);
+  border-top: 1.5px solid rgba(13, 122, 66,0.62);
   transform: rotate(45deg);
 }
 
 @media (max-width: 1024px) {
   .workspace-panel {
     width: 100vw;
+  }
+}
+
+/* ── Loading skeletons ──────────────────────────────────────────────────────
+   A sweeping highlight over a muted base. The sweep is a pseudo-element
+   moving on transform only - never width/left - so it composites on the GPU
+   and can't thrash layout while a page's data resolves. */
+.skeleton-block {
+  position: relative;
+  overflow: hidden;
+  background: rgba(10, 14, 26, 0.06);
+}
+
+.skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%);
+  animation: skeletonSweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes skeletonSweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   Required, not optional: this app runs two infinite animations (.ai-glow's
+   breathe, .live-pulse-dot) plus panel slide-ins and the skeleton sweep.
+   Vestibular-sensitive users need an escape from all of it. Decorative loops
+   stop entirely; functional transitions collapse to a near-instant crossfade
+   so state changes still register. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* These read as "the system is alive" rather than conveying state, so they
+     simply stop instead of flashing once. */
+  .live-pulse-dot::after,
+  .ai-glow,
+  .skeleton-block::after {
+    animation: none !important;
+  }
+
+  .skeleton-block {
+    background: rgba(10, 14, 26, 0.08);
+  }
+
+  .enterprise-card:hover,
+  .domain-card:hover,
+  .ms-blue-btn:hover {
+    transform: none;
   }
 }
